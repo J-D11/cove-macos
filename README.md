@@ -31,6 +31,18 @@ Run tests with:
 swift test
 ```
 
+## Public distribution
+
+The GitHub release is signed with a Developer ID Application certificate, uses the hardened runtime, and is notarized by Apple. Users can download, extract, and open Cove normally through Gatekeeper.
+
+Maintainers with the `CoveNotary` Keychain profile can create a notarized release with:
+
+```sh
+./script/notarize_release.sh
+```
+
+The script builds in release mode, signs with the Developer ID identity for team `XKW9265RG8`, submits the archive to Apple, staples the approval ticket, and verifies the final archive with both `codesign` and Gatekeeper.
+
 ## First launch
 
 Choose **Enable Menu Access** from the Cove menu-bar menu, then enable Cove in **System Settings → Privacy & Security → Accessibility**. Cove refreshes automatically after permission is granted. Open **Menu Bar Items** and check the controls you want in the shelf.
