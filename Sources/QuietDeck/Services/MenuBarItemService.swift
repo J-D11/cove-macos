@@ -88,13 +88,15 @@ final class MenuBarItemService {
                 let value = copyStringAttribute(scanned.element, kAXValueAttribute as CFString)
                 let label = firstUsefulString(title, description, help, value)
 
+                #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--diagnose-menu-items"),
                    !didLogDiagnostics,
                    bundleIdentifier == "eu.exelban.Stats" {
                     logger.info(
-                        "Diagnostic AX owner=\(bundleIdentifier, privacy: .public) title=\(title ?? "none", privacy: .public) description=\(description ?? "none", privacy: .public) help=\(help ?? "none", privacy: .public) value=\(value ?? "none", privacy: .public) frame=\(String(describing: scanned.frame), privacy: .public)"
+                        "Diagnostic AX owner=\(bundleIdentifier, privacy: .private(mask: .hash)) title=\(title ?? "none", privacy: .private(mask: .hash)) description=\(description ?? "none", privacy: .private(mask: .hash)) help=\(help ?? "none", privacy: .private(mask: .hash)) value=\(value ?? "none", privacy: .private(mask: .hash)) frame=\(String(describing: scanned.frame), privacy: .private(mask: .hash))"
                     )
                 }
+                #endif
                 let name = MenuExtraClassifier.displayName(
                     identifier: scanned.identifier,
                     label: label,
@@ -180,14 +182,16 @@ final class MenuBarItemService {
             "Menu-bar scan candidates=\(candidates.count, privacy: .public) AXOwners=\(accessibilityOwnerPIDs.count, privacy: .public) windowFallbacks=\(windowFallbackCount, privacy: .public) visibleFallbacks=\(visibleFallbackCount, privacy: .public) duplicatesRemoved=\(deduplication.duplicateCount, privacy: .public) placeholdersRemoved=\(deduplication.placeholderCount, privacy: .public) items=\(sortedResults.count, privacy: .public)"
         )
 
+        #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--diagnose-menu-items"), !didLogDiagnostics {
             didLogDiagnostics = true
             for (index, item) in sortedResults.enumerated() {
                 logger.info(
-                    "Diagnostic item index=\(index, privacy: .public) owner=\(item.ownerBundleIdentifier, privacy: .public) identifier=\(item.itemIdentifier ?? "none", privacy: .public) name=\(item.name, privacy: .public) symbol=\(item.symbolName ?? "app-icon", privacy: .public) x=\(item.xPosition, privacy: .public)"
+                    "Diagnostic item index=\(index, privacy: .public) owner=\(item.ownerBundleIdentifier, privacy: .private(mask: .hash)) identifier=\(item.itemIdentifier ?? "none", privacy: .private(mask: .hash)) name=\(item.name, privacy: .private(mask: .hash)) symbol=\(item.symbolName ?? "app-icon", privacy: .private(mask: .hash)) x=\(item.xPosition, privacy: .private(mask: .hash))"
                 )
             }
         }
+        #endif
 
         return MenuBarScanResult(
             items: sortedResults,

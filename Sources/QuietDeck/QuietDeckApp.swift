@@ -52,9 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.panelController = panelController
         panelController.start()
         installStatusItem()
-        logger.info(
-            "Launched path=\(Bundle.main.bundlePath, privacy: .public) accessibilityTrusted=\(store.accessibilityGranted, privacy: .public)"
-        )
+        logger.info("Launched accessibilityTrusted=\(store.accessibilityGranted, privacy: .public)")
 
         if ProcessInfo.processInfo.arguments.contains("--request-access"),
            !store.accessibilityGranted {

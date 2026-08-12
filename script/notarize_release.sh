@@ -15,6 +15,22 @@ SKIP_NOTARY_SUBMIT="${COVE_SKIP_NOTARY_SUBMIT:-0}"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$SOURCE_PLIST")"
 OUTPUT_ARCHIVE="$OUTPUT_DIR/$PRODUCT_NAME-$VERSION.app.zip"
 
+privacy_check_binary() {
+  local binary="$1"
+  local strings_file="$STAGING_ROOT/privacy-strings.txt"
+  /usr/bin/strings -a "$binary" > "$strings_file"
+
+  if /usr/bin/grep -E -i -q \
+    '(/Users/|[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}|BEGIN (RSA|OPENSSH|EC|DSA|PRIVATE) KEY|github_pat_|gh[opsu]_[[:alnum:]_]+|AIza[[:alnum:]_-]+|sk-[[:alnum:]_-]{16,})' \
+    "$strings_file"; then
+    echo "Release privacy check failed: the executable contains a private path, email, or credential-like value." >&2
+    /usr/bin/grep -E -i \
+      '(/Users/|[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}|BEGIN (RSA|OPENSSH|EC|DSA|PRIVATE) KEY|github_pat_|gh[opsu]_[[:alnum:]_]+|AIza[[:alnum:]_-]+|sk-[[:alnum:]_-]{16,})' \
+      "$strings_file" | /usr/bin/head -n 20 >&2
+    return 1
+  fi
+}
+
 DEVELOPER_ID_IDENTITY="${COVE_DEVELOPER_ID_IDENTITY:-}"
 if [[ -z "$DEVELOPER_ID_IDENTITY" ]]; then
   DEVELOPER_ID_IDENTITY="$({
@@ -35,7 +51,7 @@ SUBMISSION_ARCHIVE="$STAGING_ROOT/$PRODUCT_NAME-$VERSION-submission.zip"
 VERIFY_ROOT="$STAGING_ROOT/verify"
 
 cd "$ROOT_DIR"
-swift build -c release
+swift build -c release -Xswiftc -gnone
 BUILD_BINARY="$(swift build -c release --show-bin-path)/$APP_NAME"
 
 mkdir -p "$STAGED_MACOS" "$OUTPUT_DIR" "$VERIFY_ROOT"
@@ -43,6 +59,7 @@ cp "$BUILD_BINARY" "$STAGED_MACOS/$APP_NAME"
 cp "$SOURCE_PLIST" "$STAGED_CONTENTS/Info.plist"
 chmod +x "$STAGED_MACOS/$APP_NAME"
 /usr/bin/xattr -cr "$STAGED_APP"
+privacy_check_binary "$STAGED_MACOS/$APP_NAME"
 
 sign_app() {
   /usr/bin/codesign \
@@ -117,5 +134,6 @@ fi
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$VERIFY_ROOT/$APP_NAME.app"
 /usr/bin/xcrun stapler validate "$VERIFY_ROOT/$APP_NAME.app"
 /usr/sbin/spctl --assess --type execute --verbose=4 "$VERIFY_ROOT/$APP_NAME.app"
+privacy_check_binary "$VERIFY_ROOT/$APP_NAME.app/Contents/MacOS/$APP_NAME"
 
 echo "Notarized Cove release: $OUTPUT_ARCHIVE"
