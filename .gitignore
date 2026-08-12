@@ -1,0 +1,10 @@
+.build/
+.swiftpm/
+.codex/
+dist/
+outputs/
+work/
+design-qa.md
+.DS_Store
+*.xcuserstate
+*.log
