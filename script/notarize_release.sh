@@ -14,19 +14,16 @@ TEAM_ID="${COVE_TEAM_ID:-XKW9265RG8}"
 SKIP_NOTARY_SUBMIT="${COVE_SKIP_NOTARY_SUBMIT:-0}"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$SOURCE_PLIST")"
 OUTPUT_ARCHIVE="$OUTPUT_DIR/$PRODUCT_NAME-$VERSION.app.zip"
+PRIVACY_PATTERN='(/U''sers/|[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}|BEGIN ''(RSA|OPENSSH|EC|DSA|PRIVATE) KEY|github''_pat_|gh''[opsu]_[[:alnum:]_]+|AI''za[[:alnum:]_-]+|sk''-[[:alnum:]_-]{16,})'
 
 privacy_check_binary() {
   local binary="$1"
   local strings_file="$STAGING_ROOT/privacy-strings.txt"
   /usr/bin/strings -a "$binary" > "$strings_file"
 
-  if /usr/bin/grep -E -i -q \
-    '(/Users/|[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}|BEGIN (RSA|OPENSSH|EC|DSA|PRIVATE) KEY|github_pat_|gh[opsu]_[[:alnum:]_]+|AIza[[:alnum:]_-]+|sk-[[:alnum:]_-]{16,})' \
-    "$strings_file"; then
+  if /usr/bin/grep -E -i -q "$PRIVACY_PATTERN" "$strings_file"; then
     echo "Release privacy check failed: the executable contains a private path, email, or credential-like value." >&2
-    /usr/bin/grep -E -i \
-      '(/Users/|[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}|BEGIN (RSA|OPENSSH|EC|DSA|PRIVATE) KEY|github_pat_|gh[opsu]_[[:alnum:]_]+|AIza[[:alnum:]_-]+|sk-[[:alnum:]_-]{16,})' \
-      "$strings_file" | /usr/bin/head -n 20 >&2
+    /usr/bin/grep -E -i "$PRIVACY_PATTERN" "$strings_file" | /usr/bin/head -n 20 >&2
     return 1
   fi
 }
@@ -51,6 +48,7 @@ SUBMISSION_ARCHIVE="$STAGING_ROOT/$PRODUCT_NAME-$VERSION-submission.zip"
 VERIFY_ROOT="$STAGING_ROOT/verify"
 
 cd "$ROOT_DIR"
+./script/privacy_check.sh
 swift build -c release -Xswiftc -gnone
 BUILD_BINARY="$(swift build -c release --show-bin-path)/$APP_NAME"
 

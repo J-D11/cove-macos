@@ -41,7 +41,7 @@ Maintainers with the `CoveNotary` Keychain profile can create a notarized releas
 ./script/notarize_release.sh
 ```
 
-The script builds in release mode without debug metadata, rejects personal paths, email addresses, and credential-like strings in the executable, signs with the Developer ID identity for team `XKW9265RG8`, submits the archive to Apple, staples the approval ticket, and verifies the final archive with both `codesign` and Gatekeeper.
+The script runs the tracked-source privacy check, builds in release mode without debug metadata, rejects personal paths, email addresses, and credential-like strings in the executable, signs with the Developer ID identity for team `XKW9265RG8`, submits the archive to Apple, staples the approval ticket, and verifies the final archive with both `codesign` and Gatekeeper. The same source privacy check runs on every GitHub push and pull request.
 
 ## First launch
 
