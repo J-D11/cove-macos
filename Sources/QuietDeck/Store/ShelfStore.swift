@@ -10,6 +10,7 @@ final class ShelfStore: ObservableObject {
     @Published var menuItems: [MenuBarItemModel] = []
     @Published private(set) var selectedMenuItemIDs: [String] = []
     @Published var nowPlaying: NowPlayingItem?
+    @Published private(set) var clipboardItems: [ClipboardItem] = []
     @Published var isPresented = false
     @Published var accessibilityGranted = AccessibilityPermissionService.isTrusted
     @Published var screenRecordingGranted = ScreenRecordingPermissionService.isGranted
@@ -24,10 +25,14 @@ final class ShelfStore: ObservableObject {
     @Published var showsNowPlaying: Bool {
         didSet { UserDefaults.standard.set(showsNowPlaying, forKey: Self.showsNowPlayingKey) }
     }
+    @Published var showsVisualClipboard: Bool {
+        didSet { UserDefaults.standard.set(showsVisualClipboard, forKey: Self.showsVisualClipboardKey) }
+    }
 
     private static let keepOpenKey = "QuietDeck.keepOpen"
     private static let selectedMenuItemIDsKey = "Cove.selectedMenuItemIDs"
     private static let showsNowPlayingKey = "Cove.showsNowPlaying"
+    private static let showsVisualClipboardKey = "Cove.showsVisualClipboard"
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.astralworkslabs.QuietDeck",
         category: "ShelfStore"
@@ -35,6 +40,7 @@ final class ShelfStore: ObservableObject {
     private let menuBarService = MenuBarItemService()
     private let nativeSnapshotService = NativeMenuBarSnapshotService()
     private let nowPlayingService = NowPlayingService()
+    private let clipboardService = ClipboardService()
     private var refreshTimer: Timer?
     private var permissionTimer: Timer?
     private var nativeSnapshotTimer: Timer?
@@ -50,9 +56,15 @@ final class ShelfStore: ObservableObject {
         showsNowPlaying = UserDefaults.standard.object(forKey: Self.showsNowPlayingKey) == nil
             ? true
             : UserDefaults.standard.bool(forKey: Self.showsNowPlayingKey)
+        showsVisualClipboard = UserDefaults.standard.object(forKey: Self.showsVisualClipboardKey) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: Self.showsVisualClipboardKey)
         selectedMenuItemIDs = MenuBarSelection.normalizedIDs(
             UserDefaults.standard.stringArray(forKey: Self.selectedMenuItemIDsKey) ?? []
         )
+        clipboardService.onItemCaptured = { [weak self] item in
+            self?.insertClipboardItem(item)
+        }
     }
 
     var selectedMenuItems: [MenuBarItemModel] {
@@ -81,6 +93,14 @@ final class ShelfStore: ObservableObject {
 
     var preferredExpandedWidth: CGFloat {
         let mediaWidth: CGFloat = showsNowPlaying && nowPlaying != nil ? 248 : 0
+        let clipboardWidth: CGFloat
+        if showsVisualClipboard {
+            clipboardWidth = clipboardItems.isEmpty
+                ? 116
+                : min(CGFloat(clipboardItems.count), 3) * 98
+        } else {
+            clipboardWidth = 0
+        }
         let itemsWidth = selectedMenuItems.reduce(CGFloat.zero) { partial, item in
             partial + min(max(item.nativeDisplayWidth + 12, 32), 104)
         }
@@ -92,8 +112,9 @@ final class ShelfStore: ObservableObject {
         } else {
             contentWidth = min(itemsWidth, 520)
         }
-        let dividerWidth: CGFloat = mediaWidth > 0 && contentWidth > 0 ? 17 : 0
-        return min(max(mediaWidth + contentWidth + dividerWidth + 32, 250), 680)
+        let sectionCount = [mediaWidth, clipboardWidth, contentWidth].filter { $0 > 0 }.count
+        let dividerWidth = CGFloat(max(sectionCount - 1, 0)) * 17
+        return min(max(mediaWidth + clipboardWidth + contentWidth + dividerWidth + 32, 250), 920)
     }
 
     func start(previewMode: Bool) {
@@ -106,6 +127,9 @@ final class ShelfStore: ObservableObject {
 
         refresh()
         refreshNowPlaying()
+        if showsVisualClipboard {
+            clipboardService.start()
+        }
         installWorkspaceObservers()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -138,6 +162,7 @@ final class ShelfStore: ObservableObject {
         permissionTimer?.invalidate()
         nativeSnapshotTimer?.invalidate()
         nowPlayingTimer?.invalidate()
+        clipboardService.stop()
         nativeSnapshotTask?.cancel()
         externalMenuMonitorTask?.cancel()
         refreshTimer = nil
@@ -257,6 +282,67 @@ final class ShelfStore: ObservableObject {
             refreshNowPlaying()
             reveal()
         }
+    }
+
+    func toggleVisualClipboardVisibility() {
+        showsVisualClipboard.toggle()
+        if showsVisualClipboard {
+            clipboardService.start()
+            reveal()
+        } else {
+            clipboardService.stop()
+            clipboardItems = []
+        }
+    }
+
+    func copyClipboardItem(_ item: ClipboardItem) {
+        clipboardService.copy(item)
+        insertClipboardItem(item)
+        reveal()
+    }
+
+    func removeClipboardItem(_ item: ClipboardItem) {
+        clipboardItems.removeAll { $0.id == item.id }
+    }
+
+    func clearClipboardHistory() {
+        clipboardItems = []
+    }
+
+    func importClipboardProviders(_ providers: [NSItemProvider]) -> Bool {
+        guard showsVisualClipboard, !providers.isEmpty else { return false }
+        var accepted = false
+        for provider in providers.prefix(ClipboardHistory.maximumItemCount) {
+            if provider.canLoadObject(ofClass: NSURL.self) {
+                accepted = true
+                provider.loadObject(ofClass: NSURL.self) { [weak self] object, _ in
+                    guard let url = object as? URL else { return }
+                    Task { @MainActor in
+                        self?.insertClipboardItem(ClipboardItem(content: .files([url])))
+                    }
+                }
+            } else if provider.canLoadObject(ofClass: NSImage.self) {
+                accepted = true
+                provider.loadObject(ofClass: NSImage.self) { [weak self] object, _ in
+                    guard let image = object as? NSImage else { return }
+                    Task { @MainActor in
+                        self?.insertClipboardItem(ClipboardItem(content: .image(image)))
+                    }
+                }
+            } else if provider.canLoadObject(ofClass: NSString.self) {
+                accepted = true
+                provider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
+                    guard let text = object as? String, !text.isEmpty else { return }
+                    Task { @MainActor in
+                        self?.insertClipboardItem(ClipboardItem(content: .text(text)))
+                    }
+                }
+            }
+        }
+        if accepted {
+            reveal()
+        }
+        return accepted
     }
 
     func performNowPlayingCommand(_ command: NowPlayingCommand) {
@@ -379,6 +465,11 @@ final class ShelfStore: ObservableObject {
         UserDefaults.standard.set(selectedMenuItemIDs, forKey: Self.selectedMenuItemIDsKey)
     }
 
+    private func insertClipboardItem(_ item: ClipboardItem) {
+        clipboardItems = ClipboardHistory.inserting(item, into: clipboardItems)
+        reveal()
+    }
+
     private func loadPreviewContent() {
         accessibilityGranted = true
         screenRecordingGranted = true
@@ -390,6 +481,19 @@ final class ShelfStore: ObservableObject {
         ]
         selectedMenuItemIDs = menuItems.map(\.selectionID)
         showsNowPlaying = true
+        showsVisualClipboard = true
+        clipboardItems = [
+            ClipboardItem(content: .text("Launch notes")),
+            ClipboardItem(
+                content: .image(
+                    NSImage(
+                        systemSymbolName: "photo.fill",
+                        accessibilityDescription: "Sample image"
+                    ) ?? NSImage(size: NSSize(width: 32, height: 32))
+                )
+            ),
+            ClipboardItem(content: .files([URL(fileURLWithPath: "/tmp/Cove-Mockup.pdf")]))
+        ]
         nowPlaying = NowPlayingItem(
             title: "The Creative Act",
             artist: "Rick Rubin",

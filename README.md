@@ -8,6 +8,8 @@ Cove is a native macOS utility that turns the area beneath a MacBook notch into 
 - Choose exactly which discovered menu-bar controls appear in Cove.
 - Drag chosen controls inside Cove to reorder them.
 - Check or uncheck Now Playing independently from the menu-bar controls.
+- Keep a session-only visual history of copied text, images, and files.
+- Drop content into Cove, drag it back out, or click a card to make it ready to paste.
 - Click a menu-bar proxy to open the real item.
 - Keep third-party popovers open while you use them, then resume normal shelf collapsing when they close.
 - Match visible menu-bar controls using their live native appearance.
@@ -52,6 +54,8 @@ Choose **Enable Native Menu Appearance…** if you want Cove to mirror a control
 **Show Cove** reveals the shelf temporarily. Only **Keep Shelf Open** pins the panel. With pinning off, the shelf begins closing 0.22 seconds after the pointer leaves the notch and panel. When a proxy opens a separate third-party popover, Cove holds its shelf steady for as long as that popover remains open.
 
 Cove does not show Dock apps or app launchers. The shelf contains only selected menu-bar controls plus Now Playing when its separate option is checked.
+
+**Visual Clipboard** is enabled from Cove's menu. It watches for new clipboard changes while Cove is running and keeps up to eight recent text, image, or file items in memory. Click a card to copy it back to the system clipboard, then paste normally in any app. You can also drag supported content into Cove or drag a saved card back out. Clipboard history is never written to disk and is cleared when the feature is turned off or Cove quits.
 
 
 ## Current boundary

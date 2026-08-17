@@ -14,8 +14,8 @@ struct QuietDeckView: View {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.black.opacity(store.isPresented ? 0.48 : 0.96),
-                                    Color.black.opacity(store.isPresented ? 0.34 : 0.96)
+                                    Color.black.opacity(store.isPresented ? 0.20 : 0.96),
+                                    Color.black.opacity(store.isPresented ? 0.10 : 0.96)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -78,16 +78,35 @@ struct QuietDeckView: View {
                 )
             }
 
-            if store.showsNowPlaying, store.nowPlaying != nil, shouldShowMenuSection {
-                Rectangle()
-                    .fill(.white.opacity(0.14))
-                    .frame(width: 1, height: 34)
+            if store.showsNowPlaying,
+               store.nowPlaying != nil,
+               (store.showsVisualClipboard || shouldShowMenuSection) {
+                sectionDivider
+            }
+
+            if store.showsVisualClipboard {
+                ClipboardShelfView(store: store)
+            }
+
+            if store.showsVisualClipboard, shouldShowMenuSection {
+                sectionDivider
+            } else if store.showsNowPlaying,
+                      store.nowPlaying != nil,
+                      !store.showsVisualClipboard,
+                      shouldShowMenuSection {
+                sectionDivider
             }
 
             selectedMenuContent
         }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
+    }
+
+    private var sectionDivider: some View {
+        Rectangle()
+            .fill(.white.opacity(0.14))
+            .frame(width: 1, height: 34)
     }
 
     private var shouldShowMenuSection: Bool {

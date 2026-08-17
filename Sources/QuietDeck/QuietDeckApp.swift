@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var keepOpenMenuItem: NSMenuItem?
     private var nowPlayingMenuItem: NSMenuItem?
+    private var visualClipboardMenuItem: NSMenuItem?
     private var accessMenuItem: NSMenuItem?
     private var nativeAppearanceMenuItem: NSMenuItem?
     private var menuBarItemsMenu: NSMenu?
@@ -81,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let store = ShelfStore.shared
         keepOpenMenuItem?.state = store.keepOpen ? .on : .off
         nowPlayingMenuItem?.state = store.showsNowPlaying ? .on : .off
+        visualClipboardMenuItem?.state = store.showsVisualClipboard ? .on : .off
         accessMenuItem?.title = store.menuAccessStatusTitle
         accessMenuItem?.toolTip = store.menuAccessDiagnostic
         accessMenuItem?.image = NSImage(
@@ -123,6 +125,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         nowPlayingItem.state = ShelfStore.shared.showsNowPlaying ? .on : .off
         menu.addItem(nowPlayingItem)
         nowPlayingMenuItem = nowPlayingItem
+
+        let visualClipboardItem = makeMenuItem(
+            title: "Visual Clipboard",
+            action: #selector(toggleVisualClipboard)
+        )
+        visualClipboardItem.state = ShelfStore.shared.showsVisualClipboard ? .on : .off
+        menu.addItem(visualClipboardItem)
+        visualClipboardMenuItem = visualClipboardItem
 
         menu.addItem(makeMenuItem(title: "Show Cove", action: #selector(showMenuItems)))
         let menuItemsItem = NSMenuItem(title: "Menu Bar Items", action: nil, keyEquivalent: "")
@@ -181,6 +191,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func toggleNowPlaying() {
         ShelfStore.shared.toggleNowPlayingVisibility()
+    }
+
+    @objc private func toggleVisualClipboard() {
+        ShelfStore.shared.toggleVisualClipboardVisibility()
     }
 
     @objc private func toggleMenuBarItem(_ sender: NSMenuItem) {
