@@ -12,7 +12,7 @@ struct QuietDeckView: View {
                 .overlay {
                     deckShape
                         .fill(
-                            Color.black.opacity(store.isPresented ? 0.76 : 0.96)
+                            Color.black.opacity(store.isPresented ? 0.42 : 0.88)
                         )
                 }
                 .overlay {
@@ -20,9 +20,9 @@ struct QuietDeckView: View {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    .white.opacity(store.isPresented ? 0.075 : 0.02),
+                                    .white.opacity(store.isPresented ? 0.11 : 0.025),
                                     .clear,
-                                    .black.opacity(store.isPresented ? 0.22 : 0.04)
+                                    .black.opacity(store.isPresented ? 0.12 : 0.05)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -34,8 +34,8 @@ struct QuietDeckView: View {
                         .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    .white.opacity(store.isPresented ? 0.28 : 0.12),
-                                    .white.opacity(store.isPresented ? 0.065 : 0.03)
+                                    .white.opacity(store.isPresented ? 0.24 : 0.12),
+                                    .white.opacity(store.isPresented ? 0.035 : 0.025)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -59,7 +59,7 @@ struct QuietDeckView: View {
         .compositingGroup()
         .clipShape(deckShape)
         .shadow(
-            color: .black.opacity(store.isPresented ? 0.46 : 0.18),
+            color: .black.opacity(store.isPresented ? 0.30 : 0.16),
             radius: store.isPresented ? 18 : 5,
             y: store.isPresented ? 7 : 2
         )
@@ -82,7 +82,7 @@ struct QuietDeckView: View {
     }
 
     private var content: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             if store.showsNowPlaying, let nowPlaying = store.nowPlaying {
                 NowPlayingArtworkView(
                     item: nowPlaying,
@@ -112,14 +112,14 @@ struct QuietDeckView: View {
 
             selectedMenuContent
         }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
     }
 
     private var sectionDivider: some View {
         Rectangle()
-            .fill(.white.opacity(0.16))
-            .frame(width: 1, height: 38)
+            .fill(.white.opacity(0.11))
+            .frame(width: 1, height: 30)
     }
 
     private var shouldShowMenuSection: Bool {
@@ -136,7 +136,7 @@ struct QuietDeckView: View {
             } else if !store.selectedMenuItems.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     menuButtons(store.selectedMenuItems, presentation: .nativeStrip)
-                        .padding(.horizontal, 4)
+                        .padding(.horizontal, 2)
                 }
                 .scrollClipDisabled()
             } else {
@@ -152,7 +152,7 @@ struct QuietDeckView: View {
         _ items: [MenuBarItemModel],
         presentation: MenuBarItemPresentation = .compact
     ) -> some View {
-        HStack(spacing: presentation == .nativeStrip ? 6 : 8) {
+        HStack(spacing: presentation == .nativeStrip ? 7 : 8) {
             ForEach(items) { item in
                 MenuBarItemButton(item: item, presentation: presentation) {
                     store.activate(item)

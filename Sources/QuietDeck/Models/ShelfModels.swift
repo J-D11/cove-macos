@@ -13,7 +13,38 @@ struct MenuBarItemModel: Identifiable {
     let compactValue: String?
     let accessibilityFrame: CGRect?
     let xPosition: CGFloat
+    let isHiddenOwnerFallback: Bool
     var nativeSnapshot: NSImage? = nil
+
+    init(
+        id: String,
+        ownerBundleIdentifier: String,
+        ownerPID: pid_t,
+        itemIdentifier: String?,
+        itemIndex: Int,
+        name: String,
+        symbolName: String?,
+        ownerIcon: NSImage?,
+        compactValue: String?,
+        accessibilityFrame: CGRect?,
+        xPosition: CGFloat,
+        isHiddenOwnerFallback: Bool = false,
+        nativeSnapshot: NSImage? = nil
+    ) {
+        self.id = id
+        self.ownerBundleIdentifier = ownerBundleIdentifier
+        self.ownerPID = ownerPID
+        self.itemIdentifier = itemIdentifier
+        self.itemIndex = itemIndex
+        self.name = name
+        self.symbolName = symbolName
+        self.ownerIcon = ownerIcon
+        self.compactValue = compactValue
+        self.accessibilityFrame = accessibilityFrame
+        self.xPosition = xPosition
+        self.isHiddenOwnerFallback = isHiddenOwnerFallback
+        self.nativeSnapshot = nativeSnapshot
+    }
 
     var selectionID: String {
         if let itemIdentifier, !itemIdentifier.isEmpty {

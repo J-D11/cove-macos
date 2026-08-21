@@ -31,7 +31,7 @@ struct MenuBarItemButton: View {
                     nativeStripContent
                 }
             }
-            .frame(height: 42)
+            .frame(height: presentation == .nativeStrip ? 38 : 42)
             .background(
                 RoundedRectangle(
                     cornerRadius: presentation == .nativeStrip ? 7 : 11,
@@ -41,7 +41,7 @@ struct MenuBarItemButton: View {
                     .white.opacity(
                         isHovering
                             ? (presentation == .nativeStrip ? 0.11 : 0.12)
-                            : (presentation == .nativeStrip ? 0.025 : 0)
+                            : (presentation == .nativeStrip ? 0 : 0)
                     )
                 )
             )
@@ -49,7 +49,7 @@ struct MenuBarItemButton: View {
                 if presentation == .nativeStrip {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .strokeBorder(
-                            .white.opacity(isHovering ? 0.16 : 0.055),
+                            .white.opacity(isHovering ? 0.14 : 0),
                             lineWidth: 0.6
                         )
                 }
@@ -83,20 +83,20 @@ struct MenuBarItemButton: View {
                 .resizable()
                 .interpolation(.high)
                 .aspectRatio(contentMode: .fit)
-                .frame(width: item.nativeDisplayWidth + 4, height: 24)
-                .padding(.horizontal, 2)
+                .frame(width: item.nativeDisplayWidth + 4, height: 28)
+                .padding(.horizontal, 1)
         } else if let metricName = metricName {
             HStack(spacing: 5) {
                 itemIcon
-                    .frame(width: 18, height: 18)
+                    .frame(width: 19, height: 19)
                 Text(metricName)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.white.opacity(0.92))
             }
-            .padding(.horizontal, 3)
+            .padding(.horizontal, 2)
         } else {
             itemIcon
-                .frame(width: 18, height: 18)
+                .frame(width: 22, height: 22)
                 .padding(.horizontal, 3)
         }
     }
@@ -111,7 +111,7 @@ struct MenuBarItemButton: View {
     private var itemIcon: some View {
         if let symbolName = item.symbolName {
             Image(systemName: symbolName)
-                .font(.system(size: presentation == .nativeStrip ? 16 : 18, weight: .semibold))
+                .font(.system(size: presentation == .nativeStrip ? 19 : 18, weight: .semibold))
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(.white.opacity(0.94))
         } else if let ownerIcon = item.ownerIcon {

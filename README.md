@@ -17,7 +17,7 @@ Cove is a native macOS utility that turns the area beneath a MacBook notch into 
 - Temporarily reveal the shelf, explicitly pin it open, refresh it, or request Accessibility access from the Cove menu-bar menu.
 - The panel follows Spaces and eligible fullscreen windows.
 
-Cove uses Accessibility to discover and open menu-bar items. Choosing an item adds its proxy to the shelf; clicking the proxy forwards activation to the real menu-bar control.
+Cove uses Accessibility to discover and open menu-bar items. Choosing an item adds its proxy to the shelf; clicking the proxy forwards activation to the real menu-bar control. BetterDisplay, Input, and BUSY also remain available as app proxies when their menu-bar icons are disabled, with clicks activating the owning app.
 
 ## Build and run
 
@@ -60,7 +60,7 @@ Cove does not show Dock apps or app launchers. The shelf contains only selected 
 
 ## Current boundary
 
-Apple does not expose a public API for moving another process's status item into a custom panel. Cove discovers the accessible status item, displays its captured native appearance when available, and forwards activation to the real item. Some status items may not expose a press action on every macOS release.
+Apple does not expose a public API for moving another process's status item into a custom panel. Cove discovers the accessible status item, displays its captured native appearance when available, and forwards activation to the real item. BetterDisplay, Input, and BUSY have a narrow fallback for the case where their status item is hidden by macOS; those proxies activate the owning app instead of simulating a hidden status-item click. Cove also keeps these known owners eligible for scanning when macOS runs them as background-only apps without a Dock icon.
 
 
 ## Inspiration and license note

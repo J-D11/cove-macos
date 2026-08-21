@@ -61,9 +61,11 @@ final class MenuBarItemService {
 
         let candidates = runningApplications.filter { application in
             // Most menu-bar helpers are accessory apps. Prohibited helpers are included when
-            // WindowServer confirms that they own a status-item-layer window.
+            // WindowServer confirms that they own a status-item-layer window. Known hidden-menu
+            // owners are also included when macOS runs them as background-only apps.
             application.activationPolicy != .prohibited
                 || isKnownSystemOwner(application.bundleIdentifier)
+                || isKnownHiddenOwner(application.bundleIdentifier)
                 || windowBackedPIDs.contains(application.processIdentifier)
         }
 
@@ -171,6 +173,34 @@ final class MenuBarItemService {
             visibleFallbackCount += 1
         }
 
+        for application in candidates {
+            guard let bundleIdentifier = resolvedBundleIdentifier(for: application),
+                  let hiddenOwner = HiddenMenuBarOwnerCatalog.owner(for: bundleIdentifier),
+                  !accessibilityOwnerPIDs.contains(application.processIdentifier),
+                  !windowBackedPIDs.contains(application.processIdentifier) else {
+                continue
+            }
+
+            let id = "\(bundleIdentifier)::hidden-owner"
+            guard seenIdentifiers.insert(id).inserted else { continue }
+            results.append(
+                MenuBarItemModel(
+                    id: id,
+                    ownerBundleIdentifier: bundleIdentifier,
+                    ownerPID: application.processIdentifier,
+                    itemIdentifier: nil,
+                    itemIndex: 0,
+                    name: hiddenOwner.displayName,
+                    symbolName: hiddenOwner.symbolName,
+                    ownerIcon: copiedIcon(from: application),
+                    compactValue: nil,
+                    accessibilityFrame: nil,
+                    xPosition: .greatestFiniteMagnitude,
+                    isHiddenOwnerFallback: true
+                )
+            )
+        }
+
         let sortedCandidates = results.sorted {
             if $0.xPosition != $1.xPosition { return $0.xPosition < $1.xPosition }
             return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
@@ -205,6 +235,10 @@ final class MenuBarItemService {
     @discardableResult
     func activate(_ model: MenuBarItemModel) -> Bool {
         guard AccessibilityPermissionService.isTrusted else { return false }
+        if model.isHiddenOwnerFallback {
+            return activateHiddenOwner(model)
+        }
+
         let candidates = menuBarElements(
             processIdentifier: model.ownerPID,
             ownerBundleIdentifier: model.ownerBundleIdentifier
@@ -224,6 +258,19 @@ final class MenuBarItemService {
 
         guard let frame = resolved?.frame ?? model.accessibilityFrame else { return false }
         return postClick(at: CGPoint(x: frame.midX, y: frame.midY))
+    }
+
+    private func activateHiddenOwner(_ model: MenuBarItemModel) -> Bool {
+        if let application = NSRunningApplication(processIdentifier: model.ownerPID) {
+            return application.activate(options: [.activateAllWindows])
+        }
+
+        guard let application = NSWorkspace.shared.runningApplications.first(where: {
+            $0.bundleIdentifier?.caseInsensitiveCompare(model.ownerBundleIdentifier) == .orderedSame
+        }), let bundleURL = application.bundleURL else {
+            return false
+        }
+        return NSWorkspace.shared.open(bundleURL)
     }
 
     private func menuBarElements(
@@ -473,6 +520,11 @@ final class MenuBarItemService {
 
     private func isKnownSystemOwner(_ bundleIdentifier: String?) -> Bool {
         bundleIdentifier == "com.apple.controlcenter" || bundleIdentifier == "com.apple.systemuiserver"
+    }
+
+    private func isKnownHiddenOwner(_ bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier else { return false }
+        return HiddenMenuBarOwnerCatalog.owner(for: bundleIdentifier) != nil
     }
 
     private func postClick(at point: CGPoint) -> Bool {

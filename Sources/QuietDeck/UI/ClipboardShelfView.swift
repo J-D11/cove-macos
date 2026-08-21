@@ -18,27 +18,24 @@ struct ClipboardShelfView: View {
 
     private var shelfContent: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ZStack {
-                HStack(spacing: 5) {
-                    Image(systemName: "doc.on.clipboard")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.72))
+            HStack(spacing: 5) {
+                Image(systemName: "doc.on.clipboard")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.72))
 
-                    Text("Clipboard")
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.88))
-                }
+                Text("Clipboard")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.88))
 
-                HStack(spacing: 5) {
-                    Spacer(minLength: 0)
+                Spacer(minLength: 6)
 
-                    if !store.clipboardItems.isEmpty {
-                        Text("\(store.clipboardItems.count) items")
-                            .font(.system(size: 9.5, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.46))
-                    }
+                if !store.clipboardItems.isEmpty {
+                    Text("\(store.clipboardItems.count) items")
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.52))
                 }
             }
+            .padding(.horizontal, 7)
             .frame(maxWidth: .infinity)
 
             if store.clipboardItems.count > 3 {
