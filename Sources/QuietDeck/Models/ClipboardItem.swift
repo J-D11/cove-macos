@@ -53,6 +53,25 @@ struct ClipboardItem: Identifiable {
         }
     }
 
+    var previewTitle: String {
+        switch content {
+        case .text(let text):
+            let normalized = text
+                .split(whereSeparator: \.isWhitespace)
+                .joined(separator: " ")
+            guard !normalized.isEmpty else { return "Empty text" }
+            return normalized.count > 120
+                ? String(normalized.prefix(120)) + "…"
+                : normalized
+        case .image:
+            return "Image"
+        case .files(let urls):
+            let names = urls.prefix(2).map(\.lastPathComponent)
+            let visibleNames = names.isEmpty ? "File" : names.joined(separator: ", ")
+            return urls.count > 2 ? visibleNames + "…" : visibleNames
+        }
+    }
+
     var symbolName: String {
         switch content {
         case .text:

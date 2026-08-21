@@ -55,9 +55,23 @@ final class MenuExtraClassifierTests: XCTestCase {
                 ownerBundleIdentifier: "COM.STEIPETE.CODEXBAR"
             )
         )
+        XCTAssertTrue(
+            MenuExtraClassifier.prefersOwnerIconOverNativeSnapshot(
+                ownerBundleIdentifier: "COM.RAYCAST.MACOS"
+            )
+        )
         XCTAssertNil(
             MenuExtraClassifier.dedicatedOwnerIconResource(
                 ownerBundleIdentifier: "com.example.menu-extra"
+            )
+        )
+        XCTAssertEqual(
+            MenuExtraClassifier.dedicatedOwnerIconResource(
+                ownerBundleIdentifier: "COM.RAYCAST.MACOS"
+            ),
+            MenuExtraClassifier.DedicatedOwnerIconResource(
+                name: "production-appicon",
+                fileExtension: "icns"
             )
         )
     }

@@ -3,7 +3,7 @@ import Foundation
 struct HiddenMenuBarOwner: Equatable {
     let bundleIdentifier: String
     let displayName: String
-    let symbolName: String
+    let symbolName: String?
 }
 
 enum HiddenMenuBarOwnerCatalog {
@@ -22,6 +22,11 @@ enum HiddenMenuBarOwnerCatalog {
             bundleIdentifier: "app.busy",
             displayName: "BUSY",
             symbolName: "chart.bar.fill"
+        ),
+        HiddenMenuBarOwner(
+            bundleIdentifier: "com.raycast.macos",
+            displayName: "Raycast",
+            symbolName: nil
         )
     ]
 

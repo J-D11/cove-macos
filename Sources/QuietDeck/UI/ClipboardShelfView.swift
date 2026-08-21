@@ -50,7 +50,7 @@ struct ClipboardShelfView: View {
         .frame(
             width: store.clipboardItems.isEmpty
                 ? 116
-                : min(CGFloat(store.clipboardItems.count), 3) * 56 + 8,
+                : min(CGFloat(store.clipboardItems.count), 3) * 116 + 8,
             alignment: .leading
         )
         .padding(.vertical, 3)
@@ -133,8 +133,26 @@ private struct ClipboardItemCard: View {
             }
         } label: {
             ZStack(alignment: .bottomTrailing) {
-                preview
-                    .frame(width: 28, height: 28)
+                HStack(spacing: 6) {
+                    preview
+                        .frame(width: 25, height: 27)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(item.previewTitle)
+                            .font(.system(size: 9.5, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .truncationMode(.tail)
+
+                        Text(item.detail)
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.54))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal, 7)
 
                 if didCopy {
                     Image(systemName: "checkmark.circle.fill")
@@ -143,7 +161,7 @@ private struct ClipboardItemCard: View {
                         .background(Circle().fill(.black.opacity(0.78)))
                 }
             }
-            .frame(width: 48, height: 36)
+            .frame(width: 112, height: 42)
             .modifier(
                 ClipboardGlassSurface(
                     isInteractive: true,
@@ -155,7 +173,8 @@ private struct ClipboardItemCard: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .help("Copy \(item.title) to the clipboard")
-        .accessibilityLabel("Copy \(item.title)")
+        .accessibilityLabel("Copy \(item.previewTitle)")
+        .accessibilityValue(item.detail)
         .contextMenu {
             Button("Copy to Clipboard", action: copy)
             Button("Remove", action: remove)

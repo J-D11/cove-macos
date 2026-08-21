@@ -261,6 +261,12 @@ final class MenuBarItemService {
     }
 
     private func activateHiddenOwner(_ model: MenuBarItemModel) -> Bool {
+        if model.ownerBundleIdentifier.caseInsensitiveCompare("com.raycast.macos") == .orderedSame,
+           let raycastURL = URL(string: "raycast://"),
+           NSWorkspace.shared.open(raycastURL) {
+            return true
+        }
+
         if let application = NSRunningApplication(processIdentifier: model.ownerPID) {
             return application.activate(options: [.activateAllWindows])
         }

@@ -14,6 +14,8 @@ enum MenuExtraClassifier {
             return DedicatedOwnerIconResource(name: "ProviderIcon-codex", fileExtension: "svg")
         case "com.openai.codex":
             return DedicatedOwnerIconResource(name: "chatgptTemplate@2x", fileExtension: "png")
+        case "com.raycast.macos":
+            return DedicatedOwnerIconResource(name: "production-appicon", fileExtension: "icns")
         default:
             return nil
         }

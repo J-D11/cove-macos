@@ -32,4 +32,19 @@ final class ClipboardHistoryTests: XCTestCase {
         XCTAssertEqual(result.count, 3)
         XCTAssertEqual(result.first?.id, newest.id)
     }
+
+    func testPreviewTitleShowsCopiedTextInsteadOfGenericType() {
+        let item = ClipboardItem(content: .text("Launch\nnotes for the new shelf"))
+
+        XCTAssertEqual(item.previewTitle, "Launch notes for the new shelf")
+    }
+
+    func testPreviewTitleShowsCopiedFileNames() {
+        let item = ClipboardItem(content: .files([
+            URL(fileURLWithPath: "/tmp/Cove-one.txt"),
+            URL(fileURLWithPath: "/tmp/Cove-two.txt")
+        ]))
+
+        XCTAssertEqual(item.previewTitle, "Cove-one.txt, Cove-two.txt")
+    }
 }

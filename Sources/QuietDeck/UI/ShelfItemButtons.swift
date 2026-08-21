@@ -78,7 +78,7 @@ struct MenuBarItemButton: View {
 
     @ViewBuilder
     private var nativeStripContent: some View {
-        if let snapshot = item.nativeSnapshot {
+        if !item.prefersOwnerIconOverNativeSnapshot, let snapshot = item.nativeSnapshot {
             Image(nsImage: snapshot)
                 .resizable()
                 .interpolation(.high)

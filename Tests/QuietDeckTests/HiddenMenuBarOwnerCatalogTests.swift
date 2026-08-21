@@ -27,6 +27,14 @@ final class HiddenMenuBarOwnerCatalogTests: XCTestCase {
                 symbolName: "chart.bar.fill"
             )
         )
+        XCTAssertEqual(
+            HiddenMenuBarOwnerCatalog.owner(for: "COM.RAYCAST.MACOS"),
+            HiddenMenuBarOwner(
+                bundleIdentifier: "com.raycast.macos",
+                displayName: "Raycast",
+                symbolName: nil
+            )
+        )
     }
 
     func testDoesNotTurnEveryRunningAppIntoAHiddenMenuBarProxy() {
