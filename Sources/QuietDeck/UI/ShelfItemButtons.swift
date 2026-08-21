@@ -37,8 +37,23 @@ struct MenuBarItemButton: View {
                     cornerRadius: presentation == .nativeStrip ? 7 : 11,
                     style: .continuous
                 )
-                .fill(.white.opacity(isHovering ? (presentation == .nativeStrip ? 0.08 : 0.12) : 0))
+                .fill(
+                    .white.opacity(
+                        isHovering
+                            ? (presentation == .nativeStrip ? 0.11 : 0.12)
+                            : (presentation == .nativeStrip ? 0.025 : 0)
+                    )
+                )
             )
+            .overlay {
+                if presentation == .nativeStrip {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(
+                            .white.opacity(isHovering ? 0.16 : 0.055),
+                            lineWidth: 0.6
+                        )
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

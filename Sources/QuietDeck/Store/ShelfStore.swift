@@ -97,7 +97,7 @@ final class ShelfStore: ObservableObject {
         if showsVisualClipboard {
             clipboardWidth = clipboardItems.isEmpty
                 ? 116
-                : min(CGFloat(clipboardItems.count), 3) * 98
+                : min(CGFloat(clipboardItems.count), 3) * 56 + 8
         } else {
             clipboardWidth = 0
         }

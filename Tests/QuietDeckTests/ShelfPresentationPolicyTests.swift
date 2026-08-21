@@ -37,7 +37,7 @@ final class ShelfPresentationPolicyTests: XCTestCase {
             ShelfPresentationPolicy.shouldPresent(
                 keepOpen: false,
                 cursorInside: false,
-                lastInsideDate: now.addingTimeInterval(-0.18),
+                lastInsideDate: now.addingTimeInterval(-0.07),
                 manualRevealDeadline: .distantPast,
                 now: now
             )
@@ -46,7 +46,7 @@ final class ShelfPresentationPolicyTests: XCTestCase {
             ShelfPresentationPolicy.shouldPresent(
                 keepOpen: false,
                 cursorInside: false,
-                lastInsideDate: now.addingTimeInterval(-0.26),
+                lastInsideDate: now.addingTimeInterval(-0.14),
                 manualRevealDeadline: .distantPast,
                 now: now
             )

@@ -8,14 +8,21 @@ struct QuietDeckView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             deckShape
-                .fill(.regularMaterial)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    deckShape
+                        .fill(
+                            Color.black.opacity(store.isPresented ? 0.76 : 0.96)
+                        )
+                }
                 .overlay {
                     deckShape
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.black.opacity(store.isPresented ? 0.20 : 0.96),
-                                    Color.black.opacity(store.isPresented ? 0.10 : 0.96)
+                                    .white.opacity(store.isPresented ? 0.075 : 0.02),
+                                    .clear,
+                                    .black.opacity(store.isPresented ? 0.22 : 0.04)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -23,17 +30,18 @@ struct QuietDeckView: View {
                         )
                 }
                 .overlay {
-                    if store.isPresented {
-                        deckShape
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.26), .white.opacity(0.065)],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 0.75
-                            )
-                    }
+                    deckShape
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    .white.opacity(store.isPresented ? 0.28 : 0.12),
+                                    .white.opacity(store.isPresented ? 0.065 : 0.03)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: store.isPresented ? 0.8 : 0.6
+                        )
                 }
             if store.isPresented {
                 content
@@ -50,6 +58,11 @@ struct QuietDeckView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .compositingGroup()
         .clipShape(deckShape)
+        .shadow(
+            color: .black.opacity(store.isPresented ? 0.46 : 0.18),
+            radius: store.isPresented ? 18 : 5,
+            y: store.isPresented ? 7 : 2
+        )
         .animation(
             reduceMotion
                 ? nil
@@ -105,8 +118,8 @@ struct QuietDeckView: View {
 
     private var sectionDivider: some View {
         Rectangle()
-            .fill(.white.opacity(0.14))
-            .frame(width: 1, height: 34)
+            .fill(.white.opacity(0.16))
+            .frame(width: 1, height: 38)
     }
 
     private var shouldShowMenuSection: Bool {

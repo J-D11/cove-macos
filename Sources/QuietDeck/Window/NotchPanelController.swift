@@ -139,7 +139,9 @@ final class NotchPanelController {
 
         if shouldAnimate {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = expanded ? 0.18 : 0.14
+                context.duration = expanded
+                    ? ShelfPresentationPolicy.appearanceAnimationDuration
+                    : ShelfPresentationPolicy.disappearanceAnimationDuration
                 context.timingFunction = expanded
                     ? CAMediaTimingFunction(controlPoints: 0.20, 0.88, 0.24, 1.00)
                     : CAMediaTimingFunction(controlPoints: 0.36, 0.00, 0.20, 1.00)

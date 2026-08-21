@@ -17,7 +17,30 @@ struct ClipboardShelfView: View {
     }
 
     private var shelfContent: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 4) {
+            ZStack {
+                HStack(spacing: 5) {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.72))
+
+                    Text("Clipboard")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.88))
+                }
+
+                HStack(spacing: 5) {
+                    Spacer(minLength: 0)
+
+                    if !store.clipboardItems.isEmpty {
+                        Text("\(store.clipboardItems.count) items")
+                            .font(.system(size: 9.5, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.46))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+
             if store.clipboardItems.count > 3 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     clipboardCards
@@ -27,14 +50,23 @@ struct ClipboardShelfView: View {
                 clipboardCards
             }
         }
-        .frame(width: store.clipboardItems.isEmpty ? 116 : min(CGFloat(store.clipboardItems.count), 3) * 98)
-        .padding(.vertical, 2)
+        .frame(
+            width: store.clipboardItems.isEmpty
+                ? 116
+                : min(CGFloat(store.clipboardItems.count), 3) * 56 + 8,
+            alignment: .leading
+        )
+        .padding(.vertical, 3)
         .background {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .strokeBorder(
-                    .white.opacity(isDropTargeted ? 0.42 : 0),
-                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                )
+                .fill(.white.opacity(isDropTargeted ? 0.08 : 0.025))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .strokeBorder(
+                            .white.opacity(isDropTargeted ? 0.42 : 0.06),
+                            lineWidth: 0.65
+                        )
+                }
         }
     }
 
@@ -77,7 +109,7 @@ struct ClipboardShelfView: View {
         Label("Drop to save", systemImage: "square.and.arrow.down")
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(.white.opacity(0.68))
-            .frame(width: 110, height: 42)
+            .frame(width: 110, height: 38)
             .modifier(
                 ClipboardGlassSurface(
                     isInteractive: false,
@@ -103,24 +135,18 @@ private struct ClipboardItemCard: View {
                 didCopy = false
             }
         } label: {
-            HStack(spacing: 7) {
+            ZStack(alignment: .bottomTrailing) {
                 preview
                     .frame(width: 28, height: 28)
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(didCopy ? "Copied" : item.title)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.94))
-                        .lineLimit(1)
-                    Text(didCopy ? "Ready to paste" : item.detail)
-                        .font(.system(size: 8.5, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.52))
-                        .lineLimit(1)
+                if didCopy {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.green)
+                        .background(Circle().fill(.black.opacity(0.78)))
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 7)
-            .frame(width: 92, height: 42)
+            .frame(width: 48, height: 36)
             .modifier(
                 ClipboardGlassSurface(
                     isInteractive: true,

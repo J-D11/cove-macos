@@ -42,7 +42,14 @@ struct NowPlayingArtworkView: View {
         .padding(.horizontal, 5)
         .background {
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(.white.opacity(isHovering ? 0.075 : 0.035))
+                .fill(.white.opacity(isHovering ? 0.09 : 0.045))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .strokeBorder(
+                            .white.opacity(isHovering ? 0.15 : 0.06),
+                            lineWidth: 0.65
+                        )
+                }
         }
         .onHover { isHovering = $0 }
         .help(item.helpText)

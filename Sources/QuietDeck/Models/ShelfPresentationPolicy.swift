@@ -1,7 +1,11 @@
 import Foundation
 
 enum ShelfPresentationPolicy {
-    static let hoverExitGraceInterval: TimeInterval = 0.22
+    // Keep a short buffer so crossing the notch edge does not flicker, while
+    // keeping dismissal responsive once the pointer has clearly left the shelf.
+    static let hoverExitGraceInterval: TimeInterval = 0.10
+    static let appearanceAnimationDuration: TimeInterval = 0.09
+    static let disappearanceAnimationDuration: TimeInterval = 0.07
     static let menuProxyActivationDelayNanoseconds: UInt64 = 80_000_000
     static let externalMenuHoldDuration: TimeInterval = 2.5
 
