@@ -7,22 +7,15 @@ struct QuietDeckView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            deckShape
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    deckShape
-                        .fill(
-                            Color.black.opacity(store.isPresented ? 0.42 : 0.88)
-                        )
-                }
+            deckSurface
                 .overlay {
                     deckShape
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    .white.opacity(store.isPresented ? 0.11 : 0.025),
+                                    .white.opacity(store.isPresented ? 0.15 : 0.04),
                                     .clear,
-                                    .black.opacity(store.isPresented ? 0.12 : 0.05)
+                                    .white.opacity(store.isPresented ? 0.025 : 0.01)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -34,8 +27,8 @@ struct QuietDeckView: View {
                         .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    .white.opacity(store.isPresented ? 0.24 : 0.12),
-                                    .white.opacity(store.isPresented ? 0.035 : 0.025)
+                                    .white.opacity(store.isPresented ? 0.34 : 0.18),
+                                    .white.opacity(store.isPresented ? 0.07 : 0.04)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -59,7 +52,7 @@ struct QuietDeckView: View {
         .compositingGroup()
         .clipShape(deckShape)
         .shadow(
-            color: .black.opacity(store.isPresented ? 0.30 : 0.16),
+            color: .black.opacity(store.isPresented ? 0.22 : 0.12),
             radius: store.isPresented ? 18 : 5,
             y: store.isPresented ? 7 : 2
         )
@@ -73,6 +66,22 @@ struct QuietDeckView: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Cove")
+    }
+
+    @ViewBuilder
+    private var deckSurface: some View {
+        if #available(macOS 26.0, *) {
+            deckShape
+                .fill(.clear)
+                .glassEffect(
+                    Glass.regular
+                        .tint(.white.opacity(store.isPresented ? 0.07 : 0.02)),
+                    in: deckShape
+                )
+        } else {
+            deckShape
+                .fill(.regularMaterial)
+        }
     }
 
     private var deckShape: RoundedRectangle {

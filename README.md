@@ -51,6 +51,8 @@ Choose **Enable Menu Access** from the Cove menu-bar menu, then enable Cove in *
 
 Choose **Enable Native Menu Appearance…** if you want Cove to mirror a control's live menu-bar appearance. Without it, Cove uses the owning app's icon or a system symbol.
 
+Choose **Check for Updates…** from the Cove menu to check the latest stable GitHub release. Cove accepts only a versioned `.app.zip` from the trusted Cove repository, verifies the archive digest when GitHub provides one, validates the bundle identity and version, checks the code signature and Gatekeeper assessment, then replaces and relaunches the current app. An administrator confirmation may appear when Cove is installed in a protected location such as `/Applications`.
+
 **Show Cove** reveals the shelf temporarily. Only **Keep Shelf Open** pins the panel. With pinning off, the shelf begins closing 0.22 seconds after the pointer leaves the notch and panel. When a proxy opens a separate third-party popover, Cove holds its shelf steady for as long as that popover remains open.
 
 Cove does not show Dock apps or app launchers. The shelf contains only selected menu-bar controls plus Now Playing when its separate option is checked.

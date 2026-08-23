@@ -42,7 +42,6 @@ struct ClipboardShelfView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     clipboardCards
                 }
-                .scrollClipDisabled()
             } else {
                 clipboardCards
             }
@@ -134,12 +133,14 @@ private struct ClipboardItemCard: View {
         } label: {
             ZStack(alignment: .bottomTrailing) {
                 HStack(spacing: 6) {
-                    preview
-                        .frame(width: 25, height: 27)
+                    if item.image != nil || isFileItem {
+                        preview
+                            .frame(width: 25, height: 27)
+                    }
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(item.previewTitle)
-                            .font(.system(size: 9.5, weight: .semibold))
+                            .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.92))
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
@@ -181,6 +182,13 @@ private struct ClipboardItemCard: View {
             Divider()
             Button("Clear Clipboard History", action: clear)
         }
+    }
+
+    private var isFileItem: Bool {
+        if case .files = item.content {
+            return true
+        }
+        return false
     }
 
     @ViewBuilder

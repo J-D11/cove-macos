@@ -27,6 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var accessMenuItem: NSMenuItem?
     private var nativeAppearanceMenuItem: NSMenuItem?
     private var menuBarItemsMenu: NSMenu?
+    private var updateMenuItem: NSMenuItem?
+    private var updateTask: Task<Void, Never>?
+    private let updateService = UpdateService()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let ownPID = ProcessInfo.processInfo.processIdentifier
@@ -100,6 +103,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 : "rectangle.inset.filled.and.person.filled",
             accessibilityDescription: nil
         )
+        updateMenuItem?.title = updateTask == nil ? "Check for Updates…" : "Checking for Updates…"
+        updateMenuItem?.isEnabled = updateTask == nil
         rebuildMenuBarItemsMenu()
     }
 
@@ -163,6 +168,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let refreshItem = makeMenuItem(title: "Refresh", action: #selector(refresh), keyEquivalent: "r")
         menu.addItem(refreshItem)
+        let updateItem = makeMenuItem(
+            title: "Check for Updates…",
+            action: #selector(checkForUpdates)
+        )
+        menu.addItem(updateItem)
+        updateMenuItem = updateItem
         menu.addItem(.separator())
 
         let quitItem = makeMenuItem(title: "Quit Cove", action: #selector(quit), keyEquivalent: "q")
@@ -252,6 +263,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func refresh() {
         ShelfStore.shared.refresh()
+    }
+
+    @objc private func checkForUpdates() {
+        guard updateTask == nil else { return }
+        updateMenuItem?.title = "Checking for Updates…"
+        updateMenuItem?.isEnabled = false
+
+        updateTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.updateTask = nil
+                self.updateMenuItem?.title = "Check for Updates…"
+                self.updateMenuItem?.isEnabled = true
+            }
+
+            do {
+                guard let update = try await self.updateService.checkForUpdates() else {
+                    self.showUpdateAlert(
+                        title: "Cove is up to date",
+                        message: "You are running Cove \(self.updateService.versionDescription)."
+                    )
+                    return
+                }
+
+                let alert = NSAlert()
+                alert.messageText = "Cove \(update.version) is available"
+                alert.informativeText = "Install \(update.releaseName)? Cove will quit and reopen after the signed update is verified."
+                alert.alertStyle = .informational
+                alert.addButton(withTitle: "Install Update")
+                alert.addButton(withTitle: "Later")
+
+                guard alert.runModal() == .alertFirstButtonReturn else { return }
+                self.updateMenuItem?.title = "Installing Update…"
+                try await self.updateService.prepareInstallation(for: update)
+                NSApp.terminate(nil)
+            } catch {
+                self.showUpdateAlert(
+                    title: "Update failed",
+                    message: error.localizedDescription
+                )
+            }
+        }
+    }
+
+    private func showUpdateAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     @objc private func quit() {
