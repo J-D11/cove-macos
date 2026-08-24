@@ -34,4 +34,22 @@ final class MenuBarSelectionTests: XCTestCase {
             ["sound", "battery", "wifi"]
         )
     }
+
+    func testOffsetMoveSupportsAccessibleReordering() {
+        XCTAssertEqual(
+            MenuBarSelection.moving("sound", by: -1, in: ["wifi", "sound", "battery"]),
+            ["sound", "wifi", "battery"]
+        )
+        XCTAssertEqual(
+            MenuBarSelection.moving("sound", by: 1, in: ["wifi", "sound", "battery"]),
+            ["wifi", "battery", "sound"]
+        )
+    }
+
+    func testOffsetMoveStopsAtCollectionEdges() {
+        XCTAssertEqual(
+            MenuBarSelection.moving("wifi", by: -1, in: ["wifi", "sound"]),
+            ["wifi", "sound"]
+        )
+    }
 }

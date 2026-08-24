@@ -16,6 +16,11 @@ final class ClipboardPersistenceService {
         let sourceApplicationName: String?
         let sourceApplicationBundleIdentifier: String?
         let isPinned: Bool
+        let ocrText: String?
+        let collectionName: String?
+        let tags: [String]?
+        let expiresAt: Date?
+        let removesAfterPaste: Bool?
         let text: String?
         let rtfData: Data?
         let htmlData: Data?
@@ -28,6 +33,11 @@ final class ClipboardPersistenceService {
             sourceApplicationName = item.sourceApplicationName
             sourceApplicationBundleIdentifier = item.sourceApplicationBundleIdentifier
             isPinned = item.isPinned
+            ocrText = item.ocrText
+            collectionName = item.collectionName
+            tags = item.tags
+            expiresAt = item.expiresAt
+            removesAfterPaste = item.removesAfterPaste
             switch item.content {
             case .text(let value):
                 kind = .text
@@ -88,7 +98,12 @@ final class ClipboardPersistenceService {
                 createdAt: createdAt,
                 sourceApplicationName: sourceApplicationName,
                 sourceApplicationBundleIdentifier: sourceApplicationBundleIdentifier,
-                isPinned: isPinned
+                isPinned: isPinned,
+                ocrText: ocrText,
+                collectionName: collectionName,
+                tags: tags ?? [],
+                expiresAt: expiresAt,
+                removesAfterPaste: removesAfterPaste ?? false
             )
         }
     }

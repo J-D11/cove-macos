@@ -70,6 +70,51 @@ final class ClipboardHistoryTests: XCTestCase {
         XCTAssertFalse(file.matchesSearch("invoice"))
     }
 
+    func testSearchMatchesOCRCollectionAndTags() {
+        let item = ClipboardItem(
+            content: .text("Image metadata placeholder"),
+            ocrText: "Invoice total 42 dollars",
+            collectionName: "Work",
+            tags: ["receipt", "finance"]
+        )
+
+        XCTAssertTrue(item.matchesSearch("invoice"))
+        XCTAssertTrue(item.matchesSearch("work"))
+        XCTAssertTrue(item.matchesSearch("finance"))
+    }
+
+    func testExpiredItemsAreRemovedWhenHistoryIsTrimmed() {
+        let expired = ClipboardItem(
+            content: .text("Expired"),
+            expiresAt: Date(timeIntervalSinceNow: -1)
+        )
+        let active = ClipboardItem(content: .text("Active"))
+
+        XCTAssertEqual(ClipboardHistory.trimming([expired, active], limit: 8).map(\.id), [active.id])
+    }
+
+    func testDuplicateCapturePreservesIntelligenceMetadata() {
+        let existing = ClipboardItem(
+            content: .text("Saved prompt"),
+            isPinned: true,
+            ocrText: "Indexed",
+            collectionName: "Prompts",
+            tags: ["favorite"],
+            expiresAt: Date(timeIntervalSinceNow: 600),
+            removesAfterPaste: true
+        )
+        let duplicate = ClipboardItem(content: .text("Saved prompt"))
+
+        let result = ClipboardHistory.inserting(duplicate, into: [existing])
+
+        XCTAssertTrue(result[0].isPinned)
+        XCTAssertEqual(result[0].ocrText, "Indexed")
+        XCTAssertEqual(result[0].collectionName, "Prompts")
+        XCTAssertEqual(result[0].tags, ["favorite"])
+        XCTAssertTrue(result[0].removesAfterPaste)
+        XCTAssertNotNil(result[0].expiresAt)
+    }
+
     func testOnlySavedItemsPersistWhenRecentHistoryIsDisabled() {
         let recent = ClipboardItem(content: .text("Recent"))
         let saved = ClipboardItem(content: .text("Saved"), isPinned: true)

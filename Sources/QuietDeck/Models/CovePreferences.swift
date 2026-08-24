@@ -10,6 +10,10 @@ enum CovePreferences {
     static let quickPasteShortcutsEnabledKey = "Cove.quickPasteShortcutsEnabled"
     static let automaticUpdateChecksEnabledKey = "Cove.automaticUpdateChecksEnabled"
     static let enhancedGlassContrastKey = "Cove.enhancedGlassContrast"
+    static let clipboardCollectionsKey = "Cove.clipboardCollections"
+    static let perAppProfilesEnabledKey = "Cove.perAppProfilesEnabled"
+    static let shelfProfilesKey = "Cove.shelfProfiles"
+    static let updateChannelKey = "Cove.updateChannel"
     static let selectedMenuItemNamesKey = "Cove.selectedMenuItemNames"
     static let lastAutomaticUpdateCheckKey = "Cove.lastAutomaticUpdateCheck"
 
@@ -22,4 +26,20 @@ enum CovePreferences {
             ? defaultValue
             : defaults.bool(forKey: key)
     }
+}
+
+enum CoveUpdateChannel: String, CaseIterable, Identifiable {
+    case stable
+    case beta
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .stable: return "Stable"
+        case .beta: return "Beta"
+        }
+    }
+
+    var allowsPrereleases: Bool { self == .beta }
 }

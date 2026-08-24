@@ -104,6 +104,48 @@ struct ClipboardShelfView: View {
                         : "Search clipboard history"
                 )
 
+                Menu {
+                    Button("All Items") {
+                        store.clipboardCollectionFilter = nil
+                    }
+                    Button("Saved") {
+                        store.clipboardCollectionFilter = ShelfStore.savedCollectionFilter
+                    }
+                    if !store.clipboardCollections.isEmpty {
+                        Divider()
+                        ForEach(store.clipboardCollections, id: \.self) { collection in
+                            Button(collection) {
+                                store.clipboardCollectionFilter = collection
+                            }
+                        }
+                    }
+                } label: {
+                    Image(
+                        systemName: store.clipboardCollectionFilter == nil
+                            ? "line.3.horizontal.decrease"
+                            : "line.3.horizontal.decrease.circle.fill"
+                    )
+                    .font(.system(size: 9, weight: .semibold))
+                    .frame(width: 18, height: 18)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Filter clipboard collections")
+
+                Button {
+                    store.undoClipboardChange()
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 9, weight: .semibold))
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+                .disabled(!store.canUndoClipboardChange)
+                .opacity(store.canUndoClipboardChange ? 1 : 0.28)
+                .help("Undo clipboard deletion")
+                .accessibilityLabel("Undo clipboard deletion")
+
                 Button {
                     store.toggleClipboardCapturePaused()
                 } label: {
@@ -191,8 +233,8 @@ struct ClipboardShelfView: View {
             } else if store.filteredClipboardItems.isEmpty {
                 noResultsCard
             } else {
-                ForEach(store.filteredClipboardItems) { item in
-                    clipboardCard(item)
+                ForEach(Array(store.filteredClipboardItems.enumerated()), id: \.element.id) { index, item in
+                    clipboardCard(item, shortcutNumber: index < 9 ? index + 1 : nil)
                 }
             }
         }
@@ -200,17 +242,29 @@ struct ClipboardShelfView: View {
     }
 
     @ViewBuilder
-    private func clipboardCard(_ item: ClipboardItem) -> some View {
+    private func clipboardCard(_ item: ClipboardItem, shortcutNumber: Int?) -> some View {
         ClipboardItemCard(
             item: item,
             isSelected: store.selectedClipboardItem?.id == item.id,
             usesEnhancedContrast: store.enhancedGlassContrast,
+            shortcutNumber: store.isClipboardShortcutHUDPresented ? shortcutNumber : nil,
+            smartActions: store.smartActions(for: item),
+            collections: store.clipboardCollections,
             copy: {
                 store.selectClipboardItem(item)
                 store.copyClipboardItem(item)
             },
             paste: { store.pasteClipboardItem(item) },
             pin: { store.toggleClipboardItemPinned(item) },
+            performSmartAction: { store.performSmartAction($0, for: item) },
+            assignCollection: { store.assignClipboardItem(item, toCollection: $0) },
+            setExpiration: { date, afterPaste in
+                store.setClipboardItemExpiration(
+                    item,
+                    expiresAt: date,
+                    removesAfterPaste: afterPaste
+                )
+            },
             select: { store.selectClipboardItem(item) },
             remove: { store.removeClipboardItem(item) },
             clear: store.clearClipboardHistory
@@ -266,9 +320,15 @@ private struct ClipboardItemCard: View {
     let item: ClipboardItem
     let isSelected: Bool
     let usesEnhancedContrast: Bool
+    let shortcutNumber: Int?
+    let smartActions: [ClipboardSmartAction]
+    let collections: [String]
     let copy: () -> Void
     let paste: () -> Void
     let pin: () -> Void
+    let performSmartAction: (ClipboardSmartAction) -> Void
+    let assignCollection: (String?) -> Void
+    let setExpiration: (Date?, Bool) -> Void
     let select: () -> Void
     let remove: () -> Void
     let clear: () -> Void
@@ -276,37 +336,51 @@ private struct ClipboardItemCard: View {
     @State private var isPreviewVisible = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            Button(action: copy) {
-                cardContent
-            }
-            .buttonStyle(.plain)
-            .onDrag { item.itemProvider() }
-            .help("Copy \(item.title) to the clipboard")
-            .accessibilityLabel("Copy \(item.previewTitle)")
-            .accessibilityValue(item.previewDetail)
+        ZStack(alignment: .topLeading) {
+            HStack(spacing: 0) {
+                Button(action: copy) {
+                    cardContent
+                }
+                .buttonStyle(.plain)
+                .onDrag { item.itemProvider() }
+                .help("Copy \(item.title) to the clipboard")
+                .accessibilityLabel("Copy \(item.previewTitle)")
+                .accessibilityValue(item.previewDetail)
 
-            Button(action: pin) {
-                Image(systemName: item.isPinned ? "bookmark.fill" : "bookmark")
-                    .font(.system(size: 9.5, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.96))
-                    .frame(width: 20, height: 20)
-                    .background(
-                        Circle().fill(
-                            item.isPinned
-                                ? Color.accentColor.opacity(0.94)
-                                : Color.black.opacity(0.68)
+                Button(action: pin) {
+                    Image(systemName: item.isPinned ? "bookmark.fill" : "bookmark")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.96))
+                        .frame(width: 20, height: 20)
+                        .background(
+                            Circle().fill(
+                                item.isPinned
+                                    ? Color.accentColor.opacity(0.94)
+                                    : Color.black.opacity(0.68)
+                            )
                         )
-                    )
-                    .overlay {
-                        Circle().strokeBorder(.white.opacity(0.42), lineWidth: 0.7)
-                    }
-                    .frame(width: 32, height: 42)
+                        .overlay {
+                            Circle().strokeBorder(.white.opacity(0.42), lineWidth: 0.7)
+                        }
+                        .frame(width: 32, height: 42)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .help(item.isPinned ? "Remove from Saved" : "Save for Search")
+                .accessibilityLabel(item.isPinned ? "Remove from Saved" : "Save for Search")
             }
-            .buttonStyle(.plain)
-            .contentShape(Rectangle())
-            .help(item.isPinned ? "Remove from Saved" : "Save for Search")
-            .accessibilityLabel(item.isPinned ? "Remove from Saved" : "Save for Search")
+
+            if let shortcutNumber {
+                Text("⌘⌥\(shortcutNumber)")
+                    .font(.system(size: 7.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4)
+                    .frame(height: 14)
+                    .background(Color.accentColor, in: Capsule())
+                    .padding(3)
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
         }
         .frame(width: 112, height: 42)
         .modifier(
@@ -331,6 +405,37 @@ private struct ClipboardItemCard: View {
             Button("Copy to Clipboard", action: copy)
             Button("Paste Now", action: paste)
             Button("Preview", action: { isPreviewVisible = true })
+            if !smartActions.isEmpty {
+                Menu("Smart Actions") {
+                    ForEach(smartActions) { action in
+                        Button {
+                            performSmartAction(action)
+                        } label: {
+                            Label(action.title, systemImage: action.symbolName)
+                        }
+                    }
+                }
+            }
+            Menu("Collection") {
+                Button("No Collection") { assignCollection(nil) }
+                Divider()
+                ForEach(collections, id: \.self) { collection in
+                    Button(collection) { assignCollection(collection) }
+                }
+            }
+            Menu("Delete Automatically") {
+                Button("Never") { setExpiration(nil, false) }
+                Button("After One Paste") { setExpiration(nil, true) }
+                Button("In 10 Minutes") {
+                    setExpiration(Date().addingTimeInterval(10 * 60), false)
+                }
+                Button("In One Hour") {
+                    setExpiration(Date().addingTimeInterval(60 * 60), false)
+                }
+                Button("Tomorrow") {
+                    setExpiration(Date().addingTimeInterval(24 * 60 * 60), false)
+                }
+            }
             Button(item.isPinned ? "Remove from Saved" : "Save for Search", action: pin)
             Button("Remove", action: remove)
             Divider()

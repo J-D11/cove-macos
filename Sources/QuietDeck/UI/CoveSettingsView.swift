@@ -19,7 +19,7 @@ struct CoveSettingsView: View {
                 .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
         }
         .padding(20)
-        .frame(width: 520, height: 390)
+        .frame(width: 560, height: 520)
     }
 
     private var generalSettings: some View {
@@ -29,6 +29,32 @@ struct CoveSettingsView: View {
                 Toggle("Show Now Playing", isOn: $store.showsNowPlaying)
                 Toggle("Show visual clipboard", isOn: $store.showsVisualClipboard)
                 Toggle("Use stronger glass contrast", isOn: $store.enhancedGlassContrast)
+            }
+
+            Section("Per-App Profiles") {
+                Toggle("Use different shelf layouts by app", isOn: $store.perAppProfilesEnabled)
+                Button("Save Current Layout for \(store.activeApplicationName ?? "Current App")") {
+                    store.saveCurrentShelfProfile()
+                }
+                .disabled(store.activeApplicationBundleIdentifier == nil)
+
+                ForEach(store.shelfProfiles) { profile in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(profile.applicationName)
+                            Text(profile.bundleIdentifier)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(role: .destructive) {
+                            store.removeShelfProfile(profile)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
             }
         }
         .formStyle(.grouped)
@@ -59,7 +85,14 @@ struct CoveSettingsView: View {
                     "Enable Command-Option clipboard shortcuts",
                     isOn: $store.quickPasteShortcutsEnabled
                 )
-                Text("Use ⌘⌥1 through ⌘⌥9 to paste a recent item, ⌘⌥←/→ to select, and ⌘⌥Return to paste the selection.")
+                Text("Hold ⌘⌥ to show shortcut badges. Use ⌘⌥1 through ⌘⌥9 to paste, ⌘⌥←/→ to select, and ⌘⌥Return to paste the selection. Use ⌘⌥⇧↑/↓ to choose a menu item and ⌘⌥⇧←/→ to reorder it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Saved Collections") {
+                TextField("Collections", text: collectionsBinding)
+                Text("Separate collection names with commas. Assign saved items from a clipboard card's context menu.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -100,12 +133,32 @@ struct CoveSettingsView: View {
         Form {
             Section("Cove Updates") {
                 Toggle(
-                    "Automatically check for stable updates",
+                    "Automatically check for updates",
                     isOn: $store.automaticUpdateChecksEnabled
                 )
+                Picker("Update channel", selection: $store.updateChannel) {
+                    ForEach(CoveUpdateChannel.allCases) { channel in
+                        Text(channel.title).tag(channel)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text(store.updateChannel == .stable
+                     ? "Stable receives finished public releases."
+                     : "Beta also receives prerelease builds for early testing.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Button("Check for Updates Now", action: checkForUpdates)
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var collectionsBinding: Binding<String> {
+        Binding(
+            get: { store.clipboardCollections.joined(separator: ", ") },
+            set: { value in
+                store.clipboardCollections = value.split(separator: ",").map(String.init)
+            }
+        )
     }
 }

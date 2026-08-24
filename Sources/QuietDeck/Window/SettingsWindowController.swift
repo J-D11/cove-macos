@@ -14,7 +14,7 @@ final class SettingsWindowController: NSWindowController {
         window.title = "Cove Settings"
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 520, height: 390))
+        window.setContentSize(NSSize(width: 560, height: 520))
         window.center()
         super.init(window: window)
     }

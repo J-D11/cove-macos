@@ -23,4 +23,14 @@ enum MenuBarSelection {
         result.insert(id, at: min(targetIndex, result.endIndex))
         return result
     }
+
+    static func moving(_ id: String, by offset: Int, in ids: [String]) -> [String] {
+        var result = normalizedIDs(ids)
+        guard offset != 0, let sourceIndex = result.firstIndex(of: id) else { return result }
+        let targetIndex = min(max(sourceIndex + offset, 0), result.count - 1)
+        guard targetIndex != sourceIndex else { return result }
+        result.remove(at: sourceIndex)
+        result.insert(id, at: targetIndex)
+        return result
+    }
 }

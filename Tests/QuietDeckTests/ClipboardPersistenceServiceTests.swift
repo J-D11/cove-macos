@@ -22,7 +22,12 @@ final class ClipboardPersistenceServiceTests: XCTestCase {
             createdAt: createdAt,
             sourceApplicationName: "Notes",
             sourceApplicationBundleIdentifier: "com.apple.Notes",
-            isPinned: true
+            isPinned: true,
+            ocrText: "Recognized Cove text",
+            collectionName: "Work",
+            tags: ["release", "notes"],
+            expiresAt: Date(timeIntervalSince1970: 1_800_000_000),
+            removesAfterPaste: true
         )
         let fileURLs = [
             URL(fileURLWithPath: "/tmp/Cove-one.txt"),
@@ -39,6 +44,11 @@ final class ClipboardPersistenceServiceTests: XCTestCase {
         XCTAssertEqual(loaded[0].sourceApplicationName, "Notes")
         XCTAssertEqual(loaded[0].sourceApplicationBundleIdentifier, "com.apple.Notes")
         XCTAssertTrue(loaded[0].isPinned)
+        XCTAssertEqual(loaded[0].ocrText, "Recognized Cove text")
+        XCTAssertEqual(loaded[0].collectionName, "Work")
+        XCTAssertEqual(loaded[0].tags, ["release", "notes"])
+        XCTAssertEqual(loaded[0].expiresAt, Date(timeIntervalSince1970: 1_800_000_000))
+        XCTAssertTrue(loaded[0].removesAfterPaste)
         guard case .richText(let loadedRichText) = loaded[0].content else {
             return XCTFail("Expected rich text")
         }

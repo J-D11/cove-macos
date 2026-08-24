@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var updateTask: Task<Void, Never>?
     private var automaticUpdateTask: Task<Void, Never>?
     private var availableUpdate: CoveUpdate?
+    private var availableUpdateChannel: CoveUpdateChannel?
     private var keyboardShortcutService: ClipboardKeyboardShortcutService?
     private var settingsWindowController: SettingsWindowController?
     private let updateService = UpdateService()
@@ -441,6 +442,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         service.pasteSelectedItem = {
             ShelfStore.shared.pasteSelectedClipboardItem()
         }
+        service.setShortcutHUDPresented = { presented in
+            ShelfStore.shared.setClipboardShortcutHUDPresented(presented)
+        }
+        service.selectMenuItemForReordering = { offset in
+            ShelfStore.shared.selectKeyboardReorderItem(by: offset)
+        }
+        service.moveMenuItemForReordering = { offset in
+            ShelfStore.shared.moveKeyboardReorderItem(by: offset)
+        }
         service.start()
         keyboardShortcutService = service
     }
@@ -460,7 +470,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
                 if store.automaticUpdateChecksEnabled, isDue, self.updateTask == nil {
                     do {
-                        self.availableUpdate = try await self.updateService.checkForUpdates()
+                        self.availableUpdate = try await self.updateService.checkForUpdates(
+                            channel: store.updateChannel
+                        )
+                        self.availableUpdateChannel = store.updateChannel
                         self.updateUpdateMenuAppearance()
                     } catch {
                         self.logger.info(
@@ -515,10 +528,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
             do {
                 let update: CoveUpdate?
-                if let availableUpdate = self.availableUpdate {
+                let channel = ShelfStore.shared.updateChannel
+                if let availableUpdate = self.availableUpdate,
+                   self.availableUpdateChannel == channel {
                     update = availableUpdate
                 } else {
-                    update = try await self.updateService.checkForUpdates()
+                    update = try await self.updateService.checkForUpdates(channel: channel)
                 }
                 guard let update else {
                     self.availableUpdate = nil
@@ -529,6 +544,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     return
                 }
                 self.availableUpdate = update
+                self.availableUpdateChannel = channel
 
                 let alert = NSAlert()
                 alert.messageText = "Cove \(update.version) is available"

@@ -9,15 +9,19 @@ Cove is a native macOS utility that turns the area beneath a MacBook notch into 
 - Drag chosen controls inside Cove to reorder them.
 - Check or uncheck Now Playing independently from the menu-bar controls.
 - Keep a visual history of copied plain text, rich text, images, and files with content-first previews, source context, timestamps, search, and pinned favorites.
+- Search text recognized locally inside copied images, organize saved items into collections, and run context-aware actions for links, email addresses, phone numbers, JSON, code indentation, and colors.
 - Drop content into Cove, drag it back out, copy a card, or paste it directly into the active app. Multi-file cards preserve their complete file list when moved between Cove surfaces.
+- Give sensitive items an expiration time or remove them automatically after one paste, with one-step undo for accidental deletion or history clearing.
 - Pause clipboard capture, exclude sensitive apps, ignore concealed password-manager content, and choose whether private app data is saved between launches.
 - Use Command-Option-1 through Command-Option-9 for quick paste, arrow shortcuts to move the active card, and Command-Option-Return to paste it.
+- Hold Command-Option to reveal shortcut badges. Add Shift to select and reorder menu items with the keyboard; VoiceOver users also get named Move Left and Move Right actions.
 - Click a menu-bar proxy to open the real item.
 - Keep third-party popovers open while you use them, then resume normal shelf collapsing when they close.
 - Match visible menu-bar controls using their live native appearance.
 - Use the installed CodexBar and ChatGPT/Codex menu symbols instead of their dark application-icon tiles.
 - Temporarily reveal the shelf, explicitly pin it open, refresh it, open Settings, or request Accessibility access from the Cove menu-bar menu.
 - Check for signed updates manually or let Cove check once per day and show an update indicator in its menu.
+- Choose Stable or Beta updates and save per-app shelf profiles that switch menu controls, Now Playing, clipboard visibility, and clipboard collection when the active app changes.
 - The panel follows Spaces and eligible fullscreen windows.
 
 Cove uses Accessibility to discover and open menu-bar items. Choosing an item adds its proxy to the shelf; clicking the proxy forwards activation to the real menu-bar control. BetterDisplay, Input, BUSY, and Raycast also remain available as app proxies when their menu-bar icons are disabled. Raycast uses its native app icon and opens through its `raycast://` URL when a direct status-item action is unavailable.
@@ -54,13 +58,13 @@ Choose **Enable Menu Access** from the Cove menu-bar menu, then enable Cove in *
 
 Choose **Enable Native Menu Appearance…** if you want Cove to mirror a control's live menu-bar appearance. Without it, Cove uses the owning app's icon or a system symbol.
 
-Choose **Check for Updates…** from the Cove menu to check the latest stable GitHub release, or enable daily checks in **Settings → Updates**. Cove accepts only a versioned `.app.zip` from the trusted Cove repository, verifies the archive digest when GitHub provides one, validates the bundle identity and version, checks the code signature and Gatekeeper assessment, shows download progress, and then replaces and relaunches the current app. You can open the release notes before installing. An administrator confirmation may appear when Cove is installed in a protected location such as `/Applications`.
+Choose **Check for Updates…** from the Cove menu to check the selected Stable or Beta GitHub release channel, or enable daily checks in **Settings → Updates**. Cove accepts only a versioned `.app.zip` from the trusted Cove repository, verifies the archive digest when GitHub provides one, validates the bundle identity and version, checks the code signature and Gatekeeper assessment, shows download progress, and then replaces and relaunches the current app. You can open the release notes before installing. An administrator confirmation may appear when Cove is installed in a protected location such as `/Applications`.
 
 **Show Cove** reveals the shelf temporarily. Only **Keep Shelf Open** pins the panel. With pinning off, the shelf begins closing 0.22 seconds after the pointer leaves the notch and panel. When a proxy opens a separate third-party popover, Cove holds its shelf steady for as long as that popover remains open.
 
 Cove is not a general Dock or application launcher. The shelf contains selected menu-bar controls, known app proxies such as Raycast when their menu item is hidden, the visual clipboard, and Now Playing when those features are enabled.
 
-**Visual Clipboard** is enabled from Cove's menu. It watches for new clipboard changes while Cove is running and keeps three to twenty recent items, with eight as the default. Click a card to copy it, use **Paste Now** from its context menu, or use the global quick-paste shortcuts. Save important cards to keep them searchable beyond the recent-item limit and across launches. You can also drag supported content into Cove or drag a saved card back out. Recent-history persistence is off by default, while explicitly saved cards are stored in Cove's private Application Support directory. **Settings → Privacy** controls pausing, app exclusions, and clearing unsaved history on quit.
+**Visual Clipboard** is enabled from Cove's menu. It watches for new clipboard changes while Cove is running and keeps three to twenty recent items, with eight as the default. Click a card to copy it, use **Paste Now** or **Smart Actions** from its context menu, or use the global quick-paste shortcuts. Image text recognition uses Apple's on-device Vision framework and does not upload clipboard content. Save important cards into collections to keep them searchable beyond the recent-item limit and across launches. You can also drag supported content into Cove or drag a saved card back out. Recent-history persistence is off by default, while explicitly saved cards are stored in Cove's private Application Support directory. **Settings → Privacy** controls pausing, app exclusions, expiration, and clearing unsaved history on quit.
 
 
 ## Current boundary

@@ -88,6 +88,9 @@ final class UpdateService {
     private static let latestReleaseURL = URL(
         string: "https://api.github.com/repos/J-D11/cove-macos/releases/latest"
     )!
+    private static let releasesURL = URL(
+        string: "https://api.github.com/repos/J-D11/cove-macos/releases?per_page=20"
+    )!
     private static let trustedDownloadHosts = Set([
         "github.com",
         "objects.githubusercontent.com",
@@ -117,8 +120,10 @@ final class UpdateService {
         currentVersion.description
     }
 
-    func checkForUpdates() async throws -> CoveUpdate? {
-        var request = URLRequest(url: Self.latestReleaseURL)
+    func checkForUpdates(channel: CoveUpdateChannel = .stable) async throws -> CoveUpdate? {
+        var request = URLRequest(
+            url: channel == .stable ? Self.latestReleaseURL : Self.releasesURL
+        )
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("Cove/\(currentVersion)", forHTTPHeaderField: "User-Agent")
 
@@ -130,22 +135,46 @@ final class UpdateService {
             throw UpdateServiceError.httpError(response.statusCode)
         }
 
-        let release: GitHubRelease
+        let releases: [GitHubRelease]
         do {
-            release = try JSONDecoder().decode(GitHubRelease.self, from: data)
+            if channel == .stable {
+                releases = [try JSONDecoder().decode(GitHubRelease.self, from: data)]
+            } else {
+                releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
+            }
         } catch {
             logger.error("Could not decode GitHub release metadata: \(error.localizedDescription, privacy: .public)")
             throw UpdateServiceError.invalidResponse
         }
 
-        guard !release.draft, !release.prerelease,
-              let version = CoveVersion(release.tagName) else {
+        let eligibleReleases = releases.compactMap { release -> (GitHubRelease, CoveVersion)? in
+            guard !release.draft,
+                  channel.allowsPrereleases || !release.prerelease,
+                  let version = CoveVersion(release.tagName),
+                  version > currentVersion else {
+                return nil
+            }
+            return (release, version)
+        }
+        guard !eligibleReleases.isEmpty else {
+            if releases.contains(where: { !$0.draft }) {
+                return nil
+            }
             throw UpdateServiceError.releaseUnavailable
         }
-        guard version > currentVersion else { return nil }
 
-        guard let asset = release.assets.first(where: isSupportedAsset(_:)),
-              isTrustedDownloadURL(asset.browserDownloadURL) else {
+        let compatibleRelease = eligibleReleases
+            .sorted { $0.1 > $1.1 }
+            .compactMap { release, version -> (GitHubRelease, CoveVersion, GitHubAsset)? in
+                guard let asset = release.assets.first(where: {
+                    isSupportedAsset($0) && isTrustedDownloadURL($0.browserDownloadURL)
+                }) else {
+                    return nil
+                }
+                return (release, version, asset)
+            }
+            .first
+        guard let (release, version, asset) = compatibleRelease else {
             throw UpdateServiceError.noCompatibleAsset
         }
 

@@ -217,6 +217,32 @@ struct QuietDeckView: View {
                             : .smooth(duration: 0.22, extraBounce: 0)
                     )
                 )
+                .overlay {
+                    if store.keyboardReorderItemID == item.selectionID {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color.accentColor.opacity(0.9), lineWidth: 1.4)
+                            .padding(1)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .contextMenu {
+                    Button("Move Left") {
+                        withAnimation(.smooth(duration: 0.22, extraBounce: 0)) {
+                            store.moveMenuItem(item.selectionID, by: -1)
+                        }
+                    }
+                    Button("Move Right") {
+                        withAnimation(.smooth(duration: 0.22, extraBounce: 0)) {
+                            store.moveMenuItem(item.selectionID, by: 1)
+                        }
+                    }
+                }
+                .accessibilityAction(named: "Move Left") {
+                    store.moveMenuItem(item.selectionID, by: -1)
+                }
+                .accessibilityAction(named: "Move Right") {
+                    store.moveMenuItem(item.selectionID, by: 1)
+                }
             }
         }
     }

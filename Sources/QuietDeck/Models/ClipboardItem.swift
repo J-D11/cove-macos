@@ -23,6 +23,11 @@ struct ClipboardItem: Identifiable {
     let sourceApplicationName: String?
     let sourceApplicationBundleIdentifier: String?
     let isPinned: Bool
+    let ocrText: String?
+    let collectionName: String?
+    let tags: [String]
+    let expiresAt: Date?
+    let removesAfterPaste: Bool
 
     static let multipleFileDragType = "com.astralworkslabs.cove.clipboard-files"
 
@@ -32,7 +37,12 @@ struct ClipboardItem: Identifiable {
         createdAt: Date = Date(),
         sourceApplicationName: String? = nil,
         sourceApplicationBundleIdentifier: String? = nil,
-        isPinned: Bool = false
+        isPinned: Bool = false,
+        ocrText: String? = nil,
+        collectionName: String? = nil,
+        tags: [String] = [],
+        expiresAt: Date? = nil,
+        removesAfterPaste: Bool = false
     ) {
         self.id = id
         self.content = content
@@ -41,6 +51,11 @@ struct ClipboardItem: Identifiable {
         self.sourceApplicationName = sourceApplicationName
         self.sourceApplicationBundleIdentifier = sourceApplicationBundleIdentifier
         self.isPinned = isPinned
+        self.ocrText = ocrText
+        self.collectionName = collectionName
+        self.tags = tags
+        self.expiresAt = expiresAt
+        self.removesAfterPaste = removesAfterPaste
     }
 
     var title: String {
@@ -76,7 +91,9 @@ struct ClipboardItem: Identifiable {
     }
 
     var previewDetail: String {
-        [detail, ageDescription].joined(separator: " • ")
+        ([collectionName, detail, expirationDescription, ageDescription] as [String?])
+            .compactMap { $0 }
+            .joined(separator: " • ")
     }
 
     var ageDescription: String {
@@ -92,7 +109,8 @@ struct ClipboardItem: Identifiable {
         case .richText(let richText):
             return Self.previewText(richText.plainText)
         case .image:
-            return "Image"
+            guard let ocrText, !ocrText.isEmpty else { return "Image" }
+            return Self.previewText(ocrText)
         case .files(let urls):
             let names = urls.prefix(2).map(\.lastPathComponent)
             let visibleNames = names.isEmpty ? "File" : names.joined(separator: ", ")
@@ -135,6 +153,24 @@ struct ClipboardItem: Identifiable {
         return image
     }
 
+    var isExpired: Bool {
+        isExpired(at: Date())
+    }
+
+    func isExpired(at date: Date) -> Bool {
+        expiresAt.map { $0 <= date } ?? false
+    }
+
+    var expirationDescription: String? {
+        if removesAfterPaste {
+            return "Delete after paste"
+        }
+        guard let expiresAt else { return nil }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return "Expires " + formatter.localizedString(for: expiresAt, relativeTo: Date())
+    }
+
     func withPinned(_ isPinned: Bool) -> ClipboardItem {
         ClipboardItem(
             id: id,
@@ -142,7 +178,43 @@ struct ClipboardItem: Identifiable {
             createdAt: createdAt,
             sourceApplicationName: sourceApplicationName,
             sourceApplicationBundleIdentifier: sourceApplicationBundleIdentifier,
-            isPinned: isPinned
+            isPinned: isPinned,
+            ocrText: ocrText,
+            collectionName: collectionName,
+            tags: tags,
+            expiresAt: expiresAt,
+            removesAfterPaste: removesAfterPaste
+        )
+    }
+
+    func withOCRText(_ text: String?) -> ClipboardItem {
+        replacing(ocrText: text)
+    }
+
+    func withCollection(_ name: String?, tags: [String]? = nil) -> ClipboardItem {
+        replacing(
+            isPinned: name == nil ? isPinned : true,
+            collectionName: name,
+            tags: tags ?? self.tags
+        )
+    }
+
+    func withExpiration(expiresAt: Date?, removesAfterPaste: Bool) -> ClipboardItem {
+        replacing(expiresAt: expiresAt, removesAfterPaste: removesAfterPaste)
+    }
+
+    func mergingMetadata(from existing: ClipboardItem?) -> ClipboardItem {
+        guard let existing else { return self }
+        let mergedOCRText = self.ocrText ?? existing.ocrText
+        let mergedCollectionName = self.collectionName ?? existing.collectionName
+        let mergedExpiration = self.expiresAt ?? existing.expiresAt
+        return replacing(
+            isPinned: isPinned || existing.isPinned,
+            ocrText: .some(mergedOCRText),
+            collectionName: .some(mergedCollectionName),
+            tags: tags.isEmpty ? existing.tags : tags,
+            expiresAt: .some(mergedExpiration),
+            removesAfterPaste: removesAfterPaste || existing.removesAfterPaste
         )
     }
 
@@ -154,11 +226,43 @@ struct ClipboardItem: Identifiable {
             detail,
             sourceApplicationName ?? "",
             sourceApplicationBundleIdentifier ?? "",
+            ocrText ?? "",
+            collectionName ?? "",
+            tags.joined(separator: " "),
             fileURLs.map(\.path).joined(separator: " ")
         ]
         return searchableValues.contains {
             $0.localizedCaseInsensitiveContains(normalizedQuery)
         }
+    }
+
+    private func replacing(
+        isPinned: Bool? = nil,
+        ocrText: String?? = nil,
+        collectionName: String?? = nil,
+        tags: [String]? = nil,
+        expiresAt: Date?? = nil,
+        removesAfterPaste: Bool? = nil
+    ) -> ClipboardItem {
+        func resolved<Value>(_ replacement: Value??, current: Value?) -> Value? {
+            switch replacement {
+            case .some(let value): return value
+            case .none: return current
+            }
+        }
+        return ClipboardItem(
+            id: id,
+            content: content,
+            createdAt: createdAt,
+            sourceApplicationName: sourceApplicationName,
+            sourceApplicationBundleIdentifier: sourceApplicationBundleIdentifier,
+            isPinned: isPinned ?? self.isPinned,
+            ocrText: resolved(ocrText, current: self.ocrText),
+            collectionName: resolved(collectionName, current: self.collectionName),
+            tags: tags ?? self.tags,
+            expiresAt: resolved(expiresAt, current: self.expiresAt),
+            removesAfterPaste: removesAfterPaste ?? self.removesAfterPaste
+        )
     }
 
     func itemProvider() -> NSItemProvider {
@@ -264,7 +368,7 @@ enum ClipboardHistory {
     ) -> [ClipboardItem] {
         guard limit > 0 else { return items.filter(\.isPinned) }
         let existingMatch = items.first { $0.fingerprint == item.fingerprint }
-        let inserted = item.withPinned(item.isPinned || existingMatch?.isPinned == true)
+        let inserted = item.mergingMetadata(from: existingMatch)
         let remaining = items.filter { $0.fingerprint != item.fingerprint }
         return trimming([inserted] + remaining, limit: limit)
     }
@@ -282,8 +386,9 @@ enum ClipboardHistory {
     }
 
     static func trimming(_ items: [ClipboardItem], limit: Int) -> [ClipboardItem] {
-        let pinned = items.filter(\.isPinned)
-        let unpinned = items.filter { !$0.isPinned }
+        let activeItems = items.filter { !$0.isExpired }
+        let pinned = activeItems.filter(\.isPinned)
+        let unpinned = activeItems.filter { !$0.isPinned }
         let availableUnpinnedCount = max(limit - pinned.count, 0)
         return pinned + unpinned.prefix(availableUnpinnedCount)
     }
@@ -292,6 +397,7 @@ enum ClipboardHistory {
         from items: [ClipboardItem],
         includesRecentHistory: Bool
     ) -> [ClipboardItem] {
-        includesRecentHistory ? items : items.filter(\.isPinned)
+        let activeItems = items.filter { !$0.isExpired }
+        return includesRecentHistory ? activeItems : activeItems.filter(\.isPinned)
     }
 }

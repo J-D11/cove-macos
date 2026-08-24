@@ -15,6 +15,13 @@ final class ShelfStore: ObservableObject {
     @Published var clipboardSearchQuery = ""
     @Published var isClipboardSearchPresented = false
     @Published var selectedClipboardItemID: UUID?
+    @Published var clipboardCollectionFilter: String?
+    @Published var isClipboardShortcutHUDPresented = false
+    @Published private(set) var canUndoClipboardChange = false
+    @Published private(set) var shelfProfiles: [ShelfProfile] = []
+    @Published private(set) var activeApplicationName: String?
+    @Published private(set) var activeApplicationBundleIdentifier: String?
+    @Published private(set) var keyboardReorderItemID: String?
     @Published var isPresented = false
     @Published var accessibilityGranted = AccessibilityPermissionService.isTrusted
     @Published var screenRecordingGranted = ScreenRecordingPermissionService.isGranted
@@ -28,7 +35,9 @@ final class ShelfStore: ObservableObject {
     }
     @Published var showsNowPlaying: Bool {
         didSet {
-            UserDefaults.standard.set(showsNowPlaying, forKey: Self.showsNowPlayingKey)
+            if !isApplyingShelfProfile {
+                UserDefaults.standard.set(showsNowPlaying, forKey: Self.showsNowPlayingKey)
+            }
             if showsNowPlaying {
                 refreshNowPlaying()
             } else {
@@ -38,7 +47,9 @@ final class ShelfStore: ObservableObject {
     }
     @Published var showsVisualClipboard: Bool {
         didSet {
-            UserDefaults.standard.set(showsVisualClipboard, forKey: Self.showsVisualClipboardKey)
+            if !isApplyingShelfProfile {
+                UserDefaults.standard.set(showsVisualClipboard, forKey: Self.showsVisualClipboardKey)
+            }
             if !showsVisualClipboard {
                 isClipboardSearchPresented = false
                 clipboardSearchQuery = ""
@@ -133,6 +144,34 @@ final class ShelfStore: ObservableObject {
             )
         }
     }
+    @Published var clipboardCollections: [String] {
+        didSet {
+            let normalized = Self.normalizedCollectionNames(clipboardCollections)
+            if normalized != clipboardCollections {
+                clipboardCollections = normalized
+                return
+            }
+            UserDefaults.standard.set(
+                clipboardCollections,
+                forKey: CovePreferences.clipboardCollectionsKey
+            )
+        }
+    }
+    @Published var perAppProfilesEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(
+                perAppProfilesEnabled,
+                forKey: CovePreferences.perAppProfilesEnabledKey
+            )
+            applyProfileForFrontmostApplication()
+        }
+    }
+    @Published var updateChannel: CoveUpdateChannel {
+        didSet {
+            UserDefaults.standard.set(updateChannel.rawValue, forKey: CovePreferences.updateChannelKey)
+            UserDefaults.standard.removeObject(forKey: CovePreferences.lastAutomaticUpdateCheckKey)
+        }
+    }
 
     private static let keepOpenKey = "QuietDeck.keepOpen"
     private static let selectedMenuItemIDsKey = "Cove.selectedMenuItemIDs"
@@ -148,10 +187,14 @@ final class ShelfStore: ObservableObject {
     private let clipboardService = ClipboardService()
     private let clipboardPasteService = ClipboardPasteService()
     private let clipboardPersistenceService = ClipboardPersistenceService()
+    private let clipboardIntelligenceService = ClipboardIntelligenceService()
+    private let clipboardOCRService = ClipboardOCRService()
+    private let shelfProfileService = ShelfProfileService()
     private var refreshTimer: Timer?
     private var permissionTimer: Timer?
     private var nativeSnapshotTimer: Timer?
     private var nowPlayingTimer: Timer?
+    private var expirationTimer: Timer?
     private var nativeSnapshotTask: Task<Void, Never>?
     private var nowPlayingRequestInFlight = false
     private var externalMenuMonitorTask: Task<Void, Never>?
@@ -159,6 +202,10 @@ final class ShelfStore: ObservableObject {
     private var previewMode = false
     private var draggedMenuItemID: String?
     private var lastMenuItemDropTargetID: String?
+    private var clipboardUndoBuffer = ClipboardUndoBuffer()
+    private var isApplyingShelfProfile = false
+
+    static let defaultClipboardCollections = ["Prompts", "Links", "Work", "Personal"]
 
     private init() {
         keepOpen = UserDefaults.standard.bool(forKey: Self.keepOpenKey)
@@ -207,12 +254,25 @@ final class ShelfStore: ObservableObject {
             forKey: CovePreferences.enhancedGlassContrastKey,
             default: false
         )
+        clipboardCollections = Self.normalizedCollectionNames(
+            UserDefaults.standard.stringArray(forKey: CovePreferences.clipboardCollectionsKey)
+                ?? Self.defaultClipboardCollections
+        )
+        perAppProfilesEnabled = CovePreferences.bool(
+            forKey: CovePreferences.perAppProfilesEnabledKey,
+            default: false
+        )
+        updateChannel = CoveUpdateChannel(
+            rawValue: UserDefaults.standard.string(forKey: CovePreferences.updateChannelKey) ?? ""
+        ) ?? .stable
+        clipboardCollectionFilter = nil
         selectedMenuItemIDs = MenuBarSelection.normalizedIDs(
             UserDefaults.standard.stringArray(forKey: Self.selectedMenuItemIDsKey) ?? []
         )
         selectedMenuItemNames = UserDefaults.standard.dictionary(
             forKey: CovePreferences.selectedMenuItemNamesKey
         ) as? [String: String] ?? [:]
+        shelfProfiles = shelfProfileService.load()
         configureClipboardCapture()
         clipboardService.onItemCaptured = { [weak self] item in
             self?.insertClipboardItem(item)
@@ -249,8 +309,17 @@ final class ShelfStore: ObservableObject {
     }
 
     var filteredClipboardItems: [ClipboardItem] {
-        clipboardItems.filter { $0.matchesSearch(clipboardSearchQuery) }
+        clipboardItems.filter { item in
+            guard !item.isExpired, item.matchesSearch(clipboardSearchQuery) else { return false }
+            if clipboardCollectionFilter == Self.savedCollectionFilter {
+                return item.isPinned
+            }
+            guard let clipboardCollectionFilter else { return true }
+            return item.collectionName == clipboardCollectionFilter
+        }
     }
+
+    static let savedCollectionFilter = "__saved__"
 
     var selectedClipboardItem: ClipboardItem? {
         guard let selectedClipboardItemID else { return filteredClipboardItems.first }
@@ -314,6 +383,9 @@ final class ShelfStore: ObservableObject {
         refresh()
         refreshNowPlaying()
         updateClipboardCaptureState()
+        for item in clipboardItems where item.image != nil && item.ocrText == nil {
+            indexOCRIfNeeded(forFingerprint: item.fingerprint)
+        }
         installWorkspaceObservers()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -339,6 +411,10 @@ final class ShelfStore: ObservableObject {
                 self.refreshNowPlaying()
             }
         }
+        expirationTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.purgeExpiredClipboardItems() }
+        }
+        updateActiveApplication(NSWorkspace.shared.frontmostApplication)
     }
 
     func stop() {
@@ -346,6 +422,7 @@ final class ShelfStore: ObservableObject {
         permissionTimer?.invalidate()
         nativeSnapshotTimer?.invalidate()
         nowPlayingTimer?.invalidate()
+        expirationTimer?.invalidate()
         clipboardService.stop()
         if clipboardClearOnQuit {
             clipboardItems = clipboardItems.filter(\.isPinned)
@@ -357,6 +434,7 @@ final class ShelfStore: ObservableObject {
         permissionTimer = nil
         nativeSnapshotTimer = nil
         nowPlayingTimer = nil
+        expirationTimer = nil
         nativeSnapshotTask = nil
         externalMenuMonitorTask = nil
         externalMenuInteractionActive = false
@@ -533,20 +611,86 @@ final class ShelfStore: ObservableObject {
     func pasteClipboardItem(_ item: ClipboardItem) -> Bool {
         let pasted = clipboardPasteService.paste(item, using: clipboardService)
         if pasted {
-            insertClipboardItem(item)
+            if item.removesAfterPaste {
+                clipboardItems.removeAll { $0.id == item.id || $0.fingerprint == item.fingerprint }
+                persistClipboardHistory()
+            } else {
+                insertClipboardItem(item)
+            }
             dismissManualReveal()
         }
         return pasted
     }
 
     func toggleClipboardItemPinned(_ item: ClipboardItem) {
-        clipboardItems = ClipboardHistory.pinning(
-            item,
-            isPinned: !item.isPinned,
-            in: clipboardItems,
-            limit: clipboardHistoryLimit
-        )
+        if item.isPinned {
+            clipboardItems = clipboardItems.map { candidate in
+                candidate.id == item.id
+                    ? candidate.withPinned(false).withCollection(nil)
+                    : candidate
+            }
+            clipboardItems = ClipboardHistory.trimming(
+                clipboardItems,
+                limit: clipboardHistoryLimit
+            )
+        } else {
+            clipboardItems = ClipboardHistory.pinning(
+                item,
+                isPinned: true,
+                in: clipboardItems,
+                limit: clipboardHistoryLimit
+            )
+        }
         persistClipboardHistory()
+    }
+
+    func smartActions(for item: ClipboardItem) -> [ClipboardSmartAction] {
+        clipboardIntelligenceService.actions(for: item)
+    }
+
+    func performSmartAction(_ action: ClipboardSmartAction, for item: ClipboardItem) {
+        switch action.operation {
+        case .open(let url):
+            NSWorkspace.shared.open(url)
+        case .copy(let text):
+            copyClipboardItem(ClipboardItem(content: .text(text)))
+        case .paste(let text):
+            _ = pasteClipboardItem(ClipboardItem(content: .text(text)))
+        }
+    }
+
+    func assignClipboardItem(_ item: ClipboardItem, toCollection name: String?) {
+        clipboardItems = clipboardItems.map { candidate in
+            candidate.id == item.id ? candidate.withCollection(name) : candidate
+        }
+        persistClipboardHistory()
+    }
+
+    func setClipboardItemExpiration(
+        _ item: ClipboardItem,
+        expiresAt: Date?,
+        removesAfterPaste: Bool = false
+    ) {
+        clipboardItems = clipboardItems.map { candidate in
+            candidate.id == item.id
+                ? candidate.withExpiration(
+                    expiresAt: expiresAt,
+                    removesAfterPaste: removesAfterPaste
+                )
+                : candidate
+        }
+        persistClipboardHistory()
+    }
+
+    func setClipboardShortcutHUDPresented(_ presented: Bool) {
+        guard quickPasteShortcutsEnabled else {
+            isClipboardShortcutHUDPresented = false
+            return
+        }
+        isClipboardShortcutHUDPresented = presented
+        if presented, showsVisualClipboard {
+            reveal(for: 1.2)
+        }
     }
 
     func selectClipboardItem(_ item: ClipboardItem) {
@@ -577,6 +721,7 @@ final class ShelfStore: ObservableObject {
     }
 
     func removeClipboardItem(_ item: ClipboardItem) {
+        captureClipboardUndoSnapshot()
         clipboardItems.removeAll { $0.id == item.id }
         if selectedClipboardItemID == item.id {
             selectedClipboardItemID = filteredClipboardItems.first?.id
@@ -585,9 +730,69 @@ final class ShelfStore: ObservableObject {
     }
 
     func clearClipboardHistory() {
+        captureClipboardUndoSnapshot()
         clipboardItems = []
         selectedClipboardItemID = nil
         try? clipboardPersistenceService.clear()
+    }
+
+    func undoClipboardChange() {
+        guard let snapshot = clipboardUndoBuffer.restore() else { return }
+        clipboardItems = snapshot
+        canUndoClipboardChange = false
+        selectedClipboardItemID = clipboardItems.first?.id
+        persistClipboardHistory()
+        reveal()
+    }
+
+    func moveMenuItem(_ id: String, by offset: Int) {
+        let updated = MenuBarSelection.moving(id, by: offset, in: selectedMenuItemIDs)
+        guard updated != selectedMenuItemIDs else { return }
+        selectedMenuItemIDs = updated
+        keyboardReorderItemID = id
+        saveSelectedMenuItemIDs()
+    }
+
+    func selectKeyboardReorderItem(by offset: Int) {
+        guard !selectedMenuItemIDs.isEmpty else { return }
+        let currentIndex = keyboardReorderItemID
+            .flatMap { selectedMenuItemIDs.firstIndex(of: $0) } ?? 0
+        let nextIndex = min(max(currentIndex + offset, 0), selectedMenuItemIDs.count - 1)
+        keyboardReorderItemID = selectedMenuItemIDs[nextIndex]
+        reveal(for: 1.2)
+    }
+
+    func moveKeyboardReorderItem(by offset: Int) {
+        if keyboardReorderItemID == nil {
+            keyboardReorderItemID = selectedMenuItemIDs.first
+        }
+        guard let keyboardReorderItemID else { return }
+        moveMenuItem(keyboardReorderItemID, by: offset)
+        reveal(for: 1.2)
+    }
+
+    func saveCurrentShelfProfile() {
+        guard let bundleIdentifier = activeApplicationBundleIdentifier else { return }
+        let profile = ShelfProfile(
+            bundleIdentifier: bundleIdentifier,
+            applicationName: activeApplicationName ?? bundleIdentifier,
+            selectedMenuItemIDs: selectedMenuItemIDs,
+            selectedMenuItemNames: selectedMenuItemNames,
+            showsNowPlaying: showsNowPlaying,
+            showsVisualClipboard: showsVisualClipboard,
+            clipboardCollectionName: clipboardCollectionFilter
+        )
+        shelfProfiles.removeAll { $0.id == profile.id }
+        shelfProfiles.append(profile)
+        shelfProfiles.sort { $0.applicationName.localizedCaseInsensitiveCompare($1.applicationName) == .orderedAscending }
+        shelfProfileService.save(shelfProfiles)
+        activeApplicationName = profile.applicationName
+    }
+
+    func removeShelfProfile(_ profile: ShelfProfile) {
+        shelfProfiles.removeAll { $0.id == profile.id }
+        shelfProfileService.save(shelfProfiles)
+        applyProfileForFrontmostApplication()
     }
 
     func importClipboardProviders(_ providers: [NSItemProvider]) -> Bool {
@@ -744,6 +949,17 @@ final class ShelfStore: ObservableObject {
                 }
             )
         }
+        workspaceObservers.append(
+            center.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
+                    as? NSRunningApplication
+                Task { @MainActor in self?.updateActiveApplication(application) }
+            }
+        )
     }
 
     private func refreshNowPlaying() {
@@ -778,6 +994,112 @@ final class ShelfStore: ObservableObject {
         selectedClipboardItemID = clipboardItems.first?.id
         persistClipboardHistory()
         reveal()
+        indexOCRIfNeeded(forFingerprint: item.fingerprint)
+    }
+
+    private func indexOCRIfNeeded(forFingerprint fingerprint: String) {
+        guard let item = clipboardItems.first(where: { $0.fingerprint == fingerprint }),
+              item.ocrText == nil,
+              let image = item.image else { return }
+        Task { [weak self] in
+            guard let self, let text = await self.clipboardOCRService.recognizeText(in: image) else {
+                return
+            }
+            guard let index = self.clipboardItems.firstIndex(where: { $0.fingerprint == fingerprint }) else {
+                return
+            }
+            self.clipboardItems[index] = self.clipboardItems[index].withOCRText(text)
+            self.persistClipboardHistory()
+        }
+    }
+
+    private func purgeExpiredClipboardItems() {
+        let active = clipboardItems.filter { !$0.isExpired }
+        guard active.count != clipboardItems.count else { return }
+        clipboardItems = active
+        if !clipboardItems.contains(where: { $0.id == selectedClipboardItemID }) {
+            selectedClipboardItemID = filteredClipboardItems.first?.id
+        }
+        persistClipboardHistory()
+    }
+
+    private func captureClipboardUndoSnapshot() {
+        clipboardUndoBuffer.capture(clipboardItems)
+        canUndoClipboardChange = clipboardUndoBuffer.canUndo
+    }
+
+    private func updateActiveApplication(_ application: NSRunningApplication?) {
+        guard let application,
+              application.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
+        activeApplicationName = application.localizedName
+        activeApplicationBundleIdentifier = application.bundleIdentifier
+        applyProfile(for: application.bundleIdentifier)
+    }
+
+    private func applyProfileForFrontmostApplication() {
+        let application = frontmostExternalApplication()
+        if let application {
+            activeApplicationName = application.localizedName
+            activeApplicationBundleIdentifier = application.bundleIdentifier
+        }
+        applyProfile(for: application?.bundleIdentifier ?? activeApplicationBundleIdentifier)
+    }
+
+    private func applyProfile(for bundleIdentifier: String?) {
+        guard perAppProfilesEnabled else { return }
+        guard let bundleIdentifier,
+              let profile = shelfProfiles.first(where: { $0.bundleIdentifier == bundleIdentifier }) else {
+            restoreDefaultShelfConfiguration()
+            return
+        }
+        isApplyingShelfProfile = true
+        selectedMenuItemIDs = MenuBarSelection.normalizedIDs(profile.selectedMenuItemIDs)
+        selectedMenuItemNames.merge(profile.selectedMenuItemNames) { _, profileValue in profileValue }
+        showsNowPlaying = profile.showsNowPlaying
+        showsVisualClipboard = profile.showsVisualClipboard
+        clipboardCollectionFilter = profile.clipboardCollectionName
+        isApplyingShelfProfile = false
+        reveal(for: 1.2)
+    }
+
+    private func restoreDefaultShelfConfiguration() {
+        isApplyingShelfProfile = true
+        selectedMenuItemIDs = MenuBarSelection.normalizedIDs(
+            UserDefaults.standard.stringArray(forKey: Self.selectedMenuItemIDsKey) ?? []
+        )
+        selectedMenuItemNames = UserDefaults.standard.dictionary(
+            forKey: CovePreferences.selectedMenuItemNamesKey
+        ) as? [String: String] ?? [:]
+        showsNowPlaying = UserDefaults.standard.object(forKey: Self.showsNowPlayingKey) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: Self.showsNowPlayingKey)
+        showsVisualClipboard = UserDefaults.standard.object(forKey: Self.showsVisualClipboardKey) == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: Self.showsVisualClipboardKey)
+        clipboardCollectionFilter = nil
+        isApplyingShelfProfile = false
+    }
+
+    private func frontmostExternalApplication() -> NSRunningApplication? {
+        let ownBundleIdentifier = Bundle.main.bundleIdentifier
+        if let frontmost = NSWorkspace.shared.frontmostApplication,
+           frontmost.bundleIdentifier != ownBundleIdentifier {
+            return frontmost
+        }
+        return NSWorkspace.shared.runningApplications.first {
+            $0.isActive && $0.bundleIdentifier != ownBundleIdentifier
+        }
+    }
+
+    nonisolated static func normalizedCollectionNames(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.compactMap { value in
+            let name = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+            let key = name.lowercased()
+            guard seen.insert(key).inserted else { return nil }
+            return name
+        }
     }
 
     private func persistSelectedMenuItemNames() {
