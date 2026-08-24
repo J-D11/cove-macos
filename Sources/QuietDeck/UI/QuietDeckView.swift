@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct QuietDeckView: View {
     @ObservedObject var store: ShelfStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -13,9 +14,17 @@ struct QuietDeckView: View {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    .white.opacity(store.isPresented ? 0.15 : 0.04),
+                                    .white.opacity(
+                                        store.isPresented
+                                            ? (store.enhancedGlassContrast ? 0.22 : 0.15)
+                                            : 0.04
+                                    ),
                                     .clear,
-                                    .white.opacity(store.isPresented ? 0.025 : 0.01)
+                                    .white.opacity(
+                                        store.isPresented
+                                            ? (store.enhancedGlassContrast ? 0.05 : 0.025)
+                                            : 0.01
+                                    )
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -27,7 +36,11 @@ struct QuietDeckView: View {
                         .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    .white.opacity(store.isPresented ? 0.34 : 0.18),
+                                    .white.opacity(
+                                        store.isPresented
+                                            ? (store.enhancedGlassContrast ? 0.48 : 0.34)
+                                            : 0.18
+                                    ),
                                     .white.opacity(store.isPresented ? 0.07 : 0.04)
                                 ],
                                 startPoint: .top,
@@ -70,12 +83,21 @@ struct QuietDeckView: View {
 
     @ViewBuilder
     private var deckSurface: some View {
-        if #available(macOS 26.0, *) {
+        if reduceTransparency {
+            deckShape
+                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.97))
+        } else if #available(macOS 26.0, *) {
             deckShape
                 .fill(.clear)
                 .glassEffect(
                     Glass.regular
-                        .tint(.white.opacity(store.isPresented ? 0.07 : 0.02)),
+                        .tint(
+                            .white.opacity(
+                                store.isPresented
+                                    ? (store.enhancedGlassContrast ? 0.12 : 0.07)
+                                    : 0.02
+                            )
+                        ),
                     in: deckShape
                 )
         } else {
@@ -127,12 +149,14 @@ struct QuietDeckView: View {
 
     private var sectionDivider: some View {
         Rectangle()
-            .fill(.white.opacity(0.11))
+            .fill(.primary.opacity(0.14))
             .frame(width: 1, height: 30)
     }
 
     private var shouldShowMenuSection: Bool {
-        !store.accessibilityGranted || !store.menuItems.isEmpty
+        !store.accessibilityGranted
+            || !store.menuItems.isEmpty
+            || !store.unavailableSelectedMenuItems.isEmpty
     }
 
     @ViewBuilder
@@ -140,18 +164,28 @@ struct QuietDeckView: View {
         Group {
             if !store.accessibilityGranted {
                 permissionButton
-            } else if store.menuItems.isEmpty {
+            } else if store.menuItems.isEmpty && store.unavailableSelectedMenuItems.isEmpty {
                 emptyScanButton
-            } else if !store.selectedMenuItems.isEmpty {
+            } else if !store.selectedMenuItems.isEmpty || !store.unavailableSelectedMenuItems.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    menuButtons(store.selectedMenuItems, presentation: .nativeStrip)
+                    HStack(spacing: 7) {
+                        menuButtons(store.selectedMenuItems, presentation: .nativeStrip)
+
+                        ForEach(store.unavailableSelectedMenuItems) { item in
+                            UnavailableMenuBarItemButton(
+                                item: item,
+                                repair: { store.repairMenuItem(item) },
+                                remove: { store.removeUnavailableMenuItem(item) }
+                            )
+                        }
+                    }
                         .padding(.horizontal, 2)
                 }
                 .scrollClipDisabled()
             } else {
-                Label("Choose menu-bar items", systemImage: "checklist")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.65))
+                    Label("Choose menu-bar items", systemImage: "checklist")
+                        .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.primary.opacity(0.68))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -167,13 +201,20 @@ struct QuietDeckView: View {
                     store.activate(item)
                 }
                 .onDrag {
-                    NSItemProvider(object: item.selectionID as NSString)
+                    store.beginMenuItemReordering(item.selectionID)
+                    return NSItemProvider(object: item.selectionID as NSString)
+                } preview: {
+                    Color.clear
+                        .frame(width: 2, height: 2)
                 }
                 .onDrop(
                     of: [.plainText],
                     delegate: MenuBarItemReorderDropDelegate(
                         targetID: item.selectionID,
-                        store: store
+                        store: store,
+                        animation: reduceMotion
+                            ? nil
+                            : .smooth(duration: 0.22, extraBounce: 0)
                     )
                 )
             }
@@ -186,12 +227,12 @@ struct QuietDeckView: View {
         } label: {
             Label("Open menu access", systemImage: "hand.raised.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.92))
+                .foregroundStyle(.primary.opacity(0.92))
                 .padding(.horizontal, 10)
                 .frame(height: 38)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(.white.opacity(0.1))
+                        .fill(.primary.opacity(0.1))
                 )
         }
         .buttonStyle(.plain)
@@ -204,12 +245,12 @@ struct QuietDeckView: View {
         } label: {
             Label("Scan again", systemImage: "arrow.clockwise")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.92))
+                .foregroundStyle(.primary.opacity(0.92))
                 .padding(.horizontal, 10)
                 .frame(height: 38)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(.white.opacity(0.1))
+                        .fill(.primary.opacity(0.1))
                 )
         }
         .buttonStyle(.plain)
@@ -221,20 +262,20 @@ struct QuietDeckView: View {
 private struct MenuBarItemReorderDropDelegate: DropDelegate {
     let targetID: String
     let store: ShelfStore
+    let animation: Animation?
 
     func dropEntered(info: DropInfo) {
-        loadDraggedID(from: info) { draggedID in
-            store.moveSelectedMenuItem(draggedID, before: targetID)
+        withAnimation(animation) {
+            store.reorderDraggedMenuItem(over: targetID)
         }
     }
 
-    func performDrop(info: DropInfo) -> Bool { true }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
 
-    private func loadDraggedID(from info: DropInfo, completion: @escaping (String) -> Void) {
-        guard let provider = info.itemProviders(for: [.plainText]).first else { return }
-        provider.loadObject(ofClass: NSString.self) { object, _ in
-            guard let id = object as? String else { return }
-            Task { @MainActor in completion(id) }
-        }
+    func performDrop(info: DropInfo) -> Bool {
+        store.finishMenuItemReordering()
+        return true
     }
 }

@@ -5,7 +5,9 @@ import SwiftUI
 @MainActor
 final class NotchPanelController {
     private final class QuietDeckPanel: NSPanel {
-        override var canBecomeKey: Bool { false }
+        // The panel remains nonactivating, but key status lets controls such as
+        // clipboard search participate in the responder chain when requested.
+        override var canBecomeKey: Bool { true }
         override var canBecomeMain: Bool { false }
     }
 
@@ -108,14 +110,15 @@ final class NotchPanelController {
             lastInsideDate = now
         }
 
-        let shouldPresent = ShelfPresentationPolicy.shouldPresent(
-            keepOpen: store.keepOpen,
-            externalMenuInteractionActive: store.externalMenuInteractionActive,
-            cursorInside: inside,
-            lastInsideDate: lastInsideDate,
-            manualRevealDeadline: store.manualRevealDeadline,
-            now: now
-        )
+        let shouldPresent = store.isClipboardSearchPresented
+            || ShelfPresentationPolicy.shouldPresent(
+                keepOpen: store.keepOpen,
+                externalMenuInteractionActive: store.externalMenuInteractionActive,
+                cursorInside: inside,
+                lastInsideDate: lastInsideDate,
+                manualRevealDeadline: store.manualRevealDeadline,
+                now: now
+            )
         if shouldPresent != store.isPresented {
             store.isPresented = shouldPresent
             updatePanelFrame(animated: true)

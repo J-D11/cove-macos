@@ -14,19 +14,22 @@ struct CoveUpdate: Equatable {
 
 enum UpdateServiceError: LocalizedError {
     case invalidResponse
+    case httpError(Int)
     case releaseUnavailable
     case noCompatibleAsset
     case invalidDownloadURL
     case checksumMismatch
     case invalidApplication
     case updateNotNewer
-    case commandFailed(String)
+    case commandFailed(String, String?)
     case installLocationUnavailable
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
             return "GitHub returned an invalid update response."
+        case .httpError(let statusCode):
+            return "GitHub returned HTTP status \(statusCode) while checking for the update."
         case .releaseUnavailable:
             return "No stable Cove release is available yet."
         case .noCompatibleAsset:
@@ -39,7 +42,10 @@ enum UpdateServiceError: LocalizedError {
             return "The downloaded update is not a valid Cove application."
         case .updateNotNewer:
             return "The downloaded version is not newer than this copy of Cove."
-        case .commandFailed(let command):
+        case .commandFailed(let command, let details):
+            if let details, !details.isEmpty {
+                return "Cove could not validate the downloaded app with \(command): \(details)"
+            }
             return "Cove could not validate the downloaded app with \(command)."
         case .installLocationUnavailable:
             return "Cove cannot replace the current app at its installed location."
@@ -117,9 +123,11 @@ final class UpdateService {
         request.setValue("Cove/\(currentVersion)", forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await session.data(for: request)
-        guard let response = response as? HTTPURLResponse,
-              (200..<300).contains(response.statusCode) else {
+        guard let response = response as? HTTPURLResponse else {
             throw UpdateServiceError.invalidResponse
+        }
+        guard (200..<300).contains(response.statusCode) else {
+            throw UpdateServiceError.httpError(response.statusCode)
         }
 
         let release: GitHubRelease
@@ -151,7 +159,10 @@ final class UpdateService {
         )
     }
 
-    func prepareInstallation(for update: CoveUpdate) async throws {
+    func prepareInstallation(
+        for update: CoveUpdate,
+        onProgress: @escaping (Double?) -> Void = { _ in }
+    ) async throws {
         guard update.version > currentVersion else {
             throw UpdateServiceError.updateNotNewer
         }
@@ -165,7 +176,7 @@ final class UpdateService {
 
         do {
             let archiveURL = stagingRoot.appendingPathComponent(update.assetName)
-            try await download(update.downloadURL, to: archiveURL)
+            try await download(update.downloadURL, to: archiveURL, onProgress: onProgress)
             try verifyChecksum(of: archiveURL, expectedSHA256: update.expectedSHA256)
 
             try run(
@@ -189,7 +200,11 @@ final class UpdateService {
         }
     }
 
-    private func download(_ url: URL, to destination: URL) async throws {
+    private func download(
+        _ url: URL,
+        to destination: URL,
+        onProgress: @escaping (Double?) -> Void
+    ) async throws {
         guard isTrustedDownloadURL(url) else {
             throw UpdateServiceError.invalidDownloadURL
         }
@@ -197,12 +212,40 @@ final class UpdateService {
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("Cove/\(currentVersion)", forHTTPHeaderField: "User-Agent")
-        let (temporaryURL, response) = try await session.download(for: request)
-        guard let response = response as? HTTPURLResponse,
-              (200..<300).contains(response.statusCode) else {
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let response = response as? HTTPURLResponse else {
             throw UpdateServiceError.invalidResponse
         }
-        try FileManager.default.moveItem(at: temporaryURL, to: destination)
+        guard (200..<300).contains(response.statusCode) else {
+            throw UpdateServiceError.httpError(response.statusCode)
+        }
+
+        let expectedLength = response.expectedContentLength > 0
+            ? response.expectedContentLength
+            : nil
+        var receivedLength: Int64 = 0
+        var lastReportedProgress = -1.0
+        var data = Data()
+        if let expectedLength {
+            data.reserveCapacity(Int(expectedLength))
+        } else {
+            onProgress(nil)
+        }
+
+        for try await byte in bytes {
+            data.append(byte)
+            receivedLength += 1
+            if let expectedLength {
+                let progress = min(Double(receivedLength) / Double(expectedLength), 1)
+                if progress - lastReportedProgress >= 0.01 || progress == 1 {
+                    lastReportedProgress = progress
+                    onProgress(progress)
+                }
+            }
+        }
+
+        try data.write(to: destination, options: .atomic)
+        onProgress(1)
     }
 
     private func verifyChecksum(of archiveURL: URL, expectedSHA256: String?) throws {
@@ -330,11 +373,19 @@ final class UpdateService {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
         try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-            throw UpdateServiceError.commandFailed(URL(fileURLWithPath: executable).lastPathComponent)
+            let details = String(
+                data: errorPipe.fileHandleForReading.readDataToEndOfFile(),
+                encoding: .utf8
+            )?.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw UpdateServiceError.commandFailed(
+                URL(fileURLWithPath: executable).lastPathComponent,
+                details
+            )
         }
     }
 

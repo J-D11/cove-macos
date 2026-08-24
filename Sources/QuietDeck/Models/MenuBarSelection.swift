@@ -14,14 +14,13 @@ enum MenuBarSelection {
         return normalized + [id]
     }
 
-    static func moving(_ id: String, before targetID: String, in ids: [String]) -> [String] {
+    static func moving(_ id: String, over targetID: String, in ids: [String]) -> [String] {
         guard id != targetID else { return normalizedIDs(ids) }
         var result = normalizedIDs(ids)
         guard let sourceIndex = result.firstIndex(of: id),
-              result.contains(targetID) else { return result }
+              let targetIndex = result.firstIndex(of: targetID) else { return result }
         result.remove(at: sourceIndex)
-        guard let targetIndex = result.firstIndex(of: targetID) else { return result }
-        result.insert(id, at: targetIndex)
+        result.insert(id, at: min(targetIndex, result.endIndex))
         return result
     }
 }

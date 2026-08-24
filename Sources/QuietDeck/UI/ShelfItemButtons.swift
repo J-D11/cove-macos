@@ -38,7 +38,7 @@ struct MenuBarItemButton: View {
                     style: .continuous
                 )
                 .fill(
-                    .white.opacity(
+                    .primary.opacity(
                         isHovering
                             ? (presentation == .nativeStrip ? 0.11 : 0.12)
                             : (presentation == .nativeStrip ? 0 : 0)
@@ -49,7 +49,7 @@ struct MenuBarItemButton: View {
                 if presentation == .nativeStrip {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .strokeBorder(
-                            .white.opacity(isHovering ? 0.14 : 0),
+                            .primary.opacity(isHovering ? 0.14 : 0),
                             lineWidth: 0.6
                         )
                 }
@@ -70,7 +70,7 @@ struct MenuBarItemButton: View {
             if let compactValue = item.compactValue {
                 Text(compactValue)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.92))
+                    .foregroundStyle(.primary.opacity(0.92))
             }
         }
         .padding(.horizontal, item.compactValue == nil ? 5 : 8)
@@ -91,7 +91,7 @@ struct MenuBarItemButton: View {
                     .frame(width: 19, height: 19)
                 Text(metricName)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.92))
+                    .foregroundStyle(.primary.opacity(0.92))
             }
             .padding(.horizontal, 2)
         } else {
@@ -113,7 +113,7 @@ struct MenuBarItemButton: View {
             Image(systemName: symbolName)
                 .font(.system(size: presentation == .nativeStrip ? 19 : 18, weight: .semibold))
                 .symbolRenderingMode(.monochrome)
-                .foregroundStyle(.white.opacity(0.94))
+                .foregroundStyle(.primary.opacity(0.94))
         } else if let ownerIcon = item.ownerIcon {
             Image(nsImage: ownerIcon)
                 .resizable()
@@ -121,7 +121,40 @@ struct MenuBarItemButton: View {
         } else {
             Image(systemName: "circle.grid.2x2.fill")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.94))
+                .foregroundStyle(.primary.opacity(0.94))
+        }
+    }
+}
+
+struct UnavailableMenuBarItemButton: View {
+    let item: UnavailableMenuBarItem
+    let repair: () -> Void
+    let remove: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: repair) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.orange)
+                .frame(width: 32, height: 38)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(.primary.opacity(isHovering ? 0.11 : 0.04))
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(.orange.opacity(isHovering ? 0.52 : 0.24), lineWidth: 0.7)
+                }
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help("\(item.name) is unavailable. Open its app and rescan.")
+        .accessibilityLabel("\(item.name), unavailable")
+        .accessibilityHint("Opens the app and rescans menu-bar items")
+        .contextMenu {
+            Button("Open App and Rescan", action: repair)
+            Button("Remove from Cove", action: remove)
         }
     }
 }

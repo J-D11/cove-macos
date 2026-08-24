@@ -24,12 +24,12 @@ struct NowPlayingArtworkView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.96))
+                    .foregroundStyle(.primary.opacity(0.96))
                     .lineLimit(1)
 
                 Text(item.artist ?? item.album ?? sourceLabel)
                     .font(.system(size: 10.5, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.58))
+                    .foregroundStyle(.primary.opacity(0.62))
                     .lineLimit(1)
 
                 if item.source == .spotify {
@@ -42,11 +42,11 @@ struct NowPlayingArtworkView: View {
         .padding(.horizontal, 5)
         .background {
             RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(.white.opacity(isHovering ? 0.09 : 0.045))
+                .fill(.primary.opacity(isHovering ? 0.09 : 0.045))
                 .overlay {
                     RoundedRectangle(cornerRadius: 13, style: .continuous)
                         .strokeBorder(
-                            .white.opacity(isHovering ? 0.15 : 0.06),
+                            .primary.opacity(isHovering ? 0.15 : 0.06),
                             lineWidth: 0.65
                         )
                 }
@@ -80,7 +80,7 @@ struct NowPlayingArtworkView: View {
                 .frame(width: 5, height: 5)
             Text("Spotify")
                 .font(.system(size: 8.5, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.46))
+                .foregroundStyle(.primary.opacity(0.52))
         }
         .frame(height: 15)
     }
@@ -93,7 +93,7 @@ struct NowPlayingArtworkView: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 8.5, weight: .bold))
-                .foregroundStyle(.white.opacity(0.82))
+                .foregroundStyle(.primary.opacity(0.84))
                 .frame(width: 12, height: 12)
         }
         .buttonStyle(.plain)

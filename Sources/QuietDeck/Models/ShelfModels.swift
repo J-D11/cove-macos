@@ -65,6 +65,15 @@ struct MenuBarItemModel: Identifiable {
     }
 }
 
+struct UnavailableMenuBarItem: Identifiable {
+    let id: String
+    let name: String
+
+    var ownerBundleIdentifier: String {
+        id.split(separator: "::", maxSplits: 1).first.map(String.init) ?? id
+    }
+}
+
 struct NowPlayingItem {
     enum Source {
         case system

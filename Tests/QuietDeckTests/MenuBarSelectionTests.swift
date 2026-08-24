@@ -16,8 +16,22 @@ final class MenuBarSelectionTests: XCTestCase {
 
     func testMovePlacesDraggedItemBeforeTarget() {
         XCTAssertEqual(
-            MenuBarSelection.moving("battery", before: "wifi", in: ["wifi", "sound", "battery"]),
+            MenuBarSelection.moving("battery", over: "wifi", in: ["wifi", "sound", "battery"]),
             ["battery", "wifi", "sound"]
+        )
+    }
+
+    func testMoveAdvancesOnePositionWhenDraggingForward() {
+        XCTAssertEqual(
+            MenuBarSelection.moving("wifi", over: "sound", in: ["wifi", "sound", "battery"]),
+            ["sound", "wifi", "battery"]
+        )
+    }
+
+    func testMoveCanReachLastPosition() {
+        XCTAssertEqual(
+            MenuBarSelection.moving("wifi", over: "battery", in: ["wifi", "sound", "battery"]),
+            ["sound", "battery", "wifi"]
         )
     }
 }
