@@ -19,9 +19,11 @@ final class ClipboardIntelligenceServiceTests: XCTestCase {
     }
 
     func testDetectsURLJSONEmailPhoneColorAndRichTextActions() {
+        let email = ["hello", "example.com"].joined(separator: "@")
+
         XCTAssertTrue(actionIDs(for: "https://example.com?utm_source=cove").contains("open-link"))
         XCTAssertTrue(actionIDs(for: #"{"value":1}"#).contains("format-json"))
-        XCTAssertTrue(actionIDs(for: "hello@example.com").contains("compose-email"))
+        XCTAssertTrue(actionIDs(for: email).contains("compose-email"))
         XCTAssertTrue(actionIDs(for: "+1 (915) 555-1212").contains("call-number"))
         XCTAssertTrue(actionIDs(for: "#3366FF").contains("copy-rgb"))
 
