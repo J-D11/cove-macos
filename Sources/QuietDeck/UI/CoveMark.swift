@@ -3,30 +3,55 @@ import AppKit
 enum CoveMark {
     static func image(size: CGFloat = 18) -> NSImage {
         let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
-            let stroke = NSBezierPath()
-            stroke.lineWidth = max(1.5, size * 0.105)
-            stroke.lineCapStyle = .round
-            stroke.lineJoinStyle = .round
-
-            let inset = size * 0.15
-            stroke.move(to: NSPoint(x: inset, y: size * 0.61))
-            stroke.curve(
-                to: NSPoint(x: size - inset, y: size * 0.61),
-                controlPoint1: NSPoint(x: size * 0.31, y: size * 0.26),
-                controlPoint2: NSPoint(x: size * 0.69, y: size * 0.26)
-            )
-            stroke.move(to: NSPoint(x: size * 0.25, y: size * 0.72))
-            stroke.curve(
-                to: NSPoint(x: size * 0.75, y: size * 0.72),
-                controlPoint1: NSPoint(x: size * 0.38, y: size * 0.90),
-                controlPoint2: NSPoint(x: size * 0.62, y: size * 0.90)
-            )
-            NSColor.labelColor.setStroke()
-            stroke.stroke()
+            let waves = [
+                NSRect(x: size * 0.08, y: size * 0.55, width: size * 0.84, height: size * 0.34),
+                NSRect(x: size * 0.10, y: size * 0.34, width: size * 0.80, height: size * 0.32),
+                NSRect(x: size * 0.12, y: size * 0.13, width: size * 0.76, height: size * 0.30)
+            ]
+            NSColor.labelColor.setFill()
+            for wave in waves.reversed() {
+                waveRibbon(in: wave).fill()
+            }
             return true
         }
         image.isTemplate = true
         image.accessibilityDescription = "Cove"
         return image
+    }
+
+    private static func waveRibbon(in rect: NSRect) -> NSBezierPath {
+        let path = NSBezierPath()
+        func point(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
+            NSPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
+        }
+
+        path.move(to: point(0.02, 0.43))
+        path.curve(
+            to: point(0.50, 0.62),
+            controlPoint1: point(0.16, 0.77),
+            controlPoint2: point(0.35, 0.78)
+        )
+        path.curve(
+            to: point(0.96, 0.57),
+            controlPoint1: point(0.68, 0.44),
+            controlPoint2: point(0.82, 0.43)
+        )
+        path.curve(
+            to: point(0.82, 0.27),
+            controlPoint1: point(0.94, 0.43),
+            controlPoint2: point(0.90, 0.33)
+        )
+        path.curve(
+            to: point(0.48, 0.36),
+            controlPoint1: point(0.68, 0.19),
+            controlPoint2: point(0.57, 0.22)
+        )
+        path.curve(
+            to: point(0.00, 0.25),
+            controlPoint1: point(0.31, 0.50),
+            controlPoint2: point(0.15, 0.52)
+        )
+        path.close()
+        return path
     }
 }

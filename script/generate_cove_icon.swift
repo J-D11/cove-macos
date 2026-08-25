@@ -29,64 +29,106 @@ NSGraphicsContext.current = context
 defer { NSGraphicsContext.restoreGraphicsState() }
 
 let tileRect = NSRect(x: 64, y: 64, width: 896, height: 896)
-NSColor(calibratedRed: 0.03, green: 0.06, blue: 0.09, alpha: 1).setFill()
+NSColor(calibratedRed: 0.015, green: 0.025, blue: 0.045, alpha: 1).setFill()
 NSBezierPath(roundedRect: NSRect(x: 48, y: 48, width: 928, height: 928), xRadius: 232, yRadius: 232).fill()
 
 let tilePath = NSBezierPath(roundedRect: tileRect, xRadius: 216, yRadius: 216)
 tilePath.addClip()
 NSGradient(
     colors: [
-        NSColor(calibratedRed: 0.07, green: 0.09, blue: 0.15, alpha: 1),
-        NSColor(calibratedRed: 0.11, green: 0.19, blue: 0.28, alpha: 1),
-        NSColor(calibratedRed: 0.06, green: 0.29, blue: 0.35, alpha: 1)
+        NSColor(calibratedRed: 0.025, green: 0.04, blue: 0.075, alpha: 1),
+        NSColor(calibratedRed: 0.055, green: 0.10, blue: 0.18, alpha: 1),
+        NSColor(calibratedRed: 0.025, green: 0.055, blue: 0.11, alpha: 1)
     ]
 )?.draw(in: tileRect, angle: -45)
 
 let innerBorder = NSBezierPath(roundedRect: NSRect(x: 76, y: 76, width: 872, height: 872), xRadius: 204, yRadius: 204)
-innerBorder.lineWidth = 4
-NSColor(calibratedRed: 0.84, green: 1, blue: 1, alpha: 0.18).setStroke()
+innerBorder.lineWidth = 3
+NSColor(calibratedRed: 0.72, green: 0.86, blue: 1, alpha: 0.16).setStroke()
 innerBorder.stroke()
 
-func drawWave(
-    start: NSPoint,
-    control1: NSPoint,
-    control2: NSPoint,
-    end: NSPoint,
-    color: NSColor
-) {
+func waveRibbon(in rect: NSRect) -> NSBezierPath {
     let path = NSBezierPath()
-    path.move(to: start)
-    path.curve(to: end, controlPoint1: control1, controlPoint2: control2)
-    path.lineWidth = 38
-    path.lineCapStyle = .round
-    path.lineJoinStyle = .round
+    func point(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
+        NSPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
+    }
+
+    path.move(to: point(0.02, 0.43))
+    path.curve(
+        to: point(0.50, 0.62),
+        controlPoint1: point(0.16, 0.77),
+        controlPoint2: point(0.35, 0.78)
+    )
+    path.curve(
+        to: point(0.96, 0.57),
+        controlPoint1: point(0.68, 0.44),
+        controlPoint2: point(0.82, 0.43)
+    )
+    path.curve(
+        to: point(0.82, 0.27),
+        controlPoint1: point(0.94, 0.43),
+        controlPoint2: point(0.90, 0.33)
+    )
+    path.curve(
+        to: point(0.48, 0.36),
+        controlPoint1: point(0.68, 0.19),
+        controlPoint2: point(0.57, 0.22)
+    )
+    path.curve(
+        to: point(0.00, 0.25),
+        controlPoint1: point(0.31, 0.50),
+        controlPoint2: point(0.15, 0.52)
+    )
+    path.close()
+    return path
+}
+
+func drawWave(in rect: NSRect, colors: [NSColor], shadowColor: NSColor) {
+    let path = waveRibbon(in: rect)
 
     NSGraphicsContext.saveGraphicsState()
     let shadow = NSShadow()
-    shadow.shadowColor = color.withAlphaComponent(0.55)
-    shadow.shadowBlurRadius = 22
+    shadow.shadowColor = shadowColor.withAlphaComponent(0.72)
+    shadow.shadowBlurRadius = 26
+    shadow.shadowOffset = NSSize(width: 0, height: -12)
     shadow.set()
-    color.setStroke()
-    path.stroke()
+    colors.last?.setFill()
+    path.fill()
     NSGraphicsContext.restoreGraphicsState()
 
-    color.setStroke()
+    NSGraphicsContext.saveGraphicsState()
+    path.addClip()
+    NSGradient(colors: colors)?.draw(in: rect, angle: 90)
+    NSGraphicsContext.restoreGraphicsState()
+
+    path.lineWidth = 3
+    NSColor.white.withAlphaComponent(0.17).setStroke()
     path.stroke()
 }
 
 drawWave(
-    start: NSPoint(x: 230, y: 474),
-    control1: NSPoint(x: 356, y: 304),
-    control2: NSPoint(x: 668, y: 304),
-    end: NSPoint(x: 794, y: 474),
-    color: NSColor(calibratedRed: 0.96, green: 1, blue: 1, alpha: 1)
+    in: NSRect(x: 218, y: 270, width: 588, height: 248),
+    colors: [
+        NSColor(calibratedRed: 0.015, green: 0.20, blue: 0.52, alpha: 1),
+        NSColor(calibratedRed: 0.00, green: 0.34, blue: 0.76, alpha: 1)
+    ],
+    shadowColor: NSColor(calibratedRed: 0.00, green: 0.08, blue: 0.22, alpha: 1)
 )
 drawWave(
-    start: NSPoint(x: 250, y: 576),
-    control1: NSPoint(x: 386, y: 724),
-    control2: NSPoint(x: 638, y: 724),
-    end: NSPoint(x: 774, y: 576),
-    color: NSColor(calibratedRed: 0.38, green: 0.88, blue: 0.84, alpha: 1)
+    in: NSRect(x: 198, y: 390, width: 628, height: 258),
+    colors: [
+        NSColor(calibratedRed: 0.00, green: 0.36, blue: 0.82, alpha: 1),
+        NSColor(calibratedRed: 0.03, green: 0.52, blue: 0.98, alpha: 1)
+    ],
+    shadowColor: NSColor(calibratedRed: 0.00, green: 0.12, blue: 0.34, alpha: 1)
+)
+drawWave(
+    in: NSRect(x: 178, y: 516, width: 668, height: 270),
+    colors: [
+        NSColor(calibratedRed: 0.04, green: 0.48, blue: 0.96, alpha: 1),
+        NSColor(calibratedRed: 0.26, green: 0.72, blue: 1.00, alpha: 1)
+    ],
+    shadowColor: NSColor(calibratedRed: 0.00, green: 0.20, blue: 0.55, alpha: 1)
 )
 
 guard let pngData = bitmap.representation(using: NSBitmapImageRep.FileType.png, properties: [:]) else {

@@ -7,6 +7,7 @@ BUNDLE_ID="com.astralworkslabs.QuietDeck"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_PLIST="$ROOT_DIR/Sources/QuietDeck/Support/Info.plist"
+SOURCE_ICON="$ROOT_DIR/Sources/QuietDeck/Support/CoveIcon.icns"
 ENTITLEMENTS="$ROOT_DIR/Sources/QuietDeck/Support/Cove.entitlements"
 OUTPUT_DIR="$ROOT_DIR/outputs"
 NOTARY_PROFILE="${COVE_NOTARY_PROFILE:-CoveNotary}"
@@ -44,6 +45,7 @@ trap 'rm -rf "$STAGING_ROOT"' EXIT
 STAGED_APP="$STAGING_ROOT/$APP_NAME.app"
 STAGED_CONTENTS="$STAGED_APP/Contents"
 STAGED_MACOS="$STAGED_CONTENTS/MacOS"
+STAGED_RESOURCES="$STAGED_CONTENTS/Resources"
 SUBMISSION_ARCHIVE="$STAGING_ROOT/$PRODUCT_NAME-$VERSION-submission.zip"
 VERIFY_ROOT="$STAGING_ROOT/verify"
 
@@ -52,9 +54,10 @@ cd "$ROOT_DIR"
 swift build -c release -Xswiftc -gnone
 BUILD_BINARY="$(swift build -c release --show-bin-path)/$APP_NAME"
 
-mkdir -p "$STAGED_MACOS" "$OUTPUT_DIR" "$VERIFY_ROOT"
+mkdir -p "$STAGED_MACOS" "$STAGED_RESOURCES" "$OUTPUT_DIR" "$VERIFY_ROOT"
 cp "$BUILD_BINARY" "$STAGED_MACOS/$APP_NAME"
 cp "$SOURCE_PLIST" "$STAGED_CONTENTS/Info.plist"
+cp "$SOURCE_ICON" "$STAGED_RESOURCES/CoveIcon.icns"
 chmod +x "$STAGED_MACOS/$APP_NAME"
 /usr/bin/xattr -cr "$STAGED_APP"
 privacy_check_binary "$STAGED_MACOS/$APP_NAME"
