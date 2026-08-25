@@ -23,7 +23,19 @@ final class MenuBarItemService {
         let index: Int
         let frame: CGRect?
     }
+    private let accessibilityTrustProvider: () -> Bool
+    private let applicationOpenHandler: (String, pid_t) -> Bool
     private var didLogDiagnostics = false
+
+    init(
+        accessibilityTrustProvider: @escaping () -> Bool = {
+            AccessibilityPermissionService.isTrusted
+        },
+        applicationOpenHandler: ((String, pid_t) -> Bool)? = nil
+    ) {
+        self.accessibilityTrustProvider = accessibilityTrustProvider
+        self.applicationOpenHandler = applicationOpenHandler ?? Self.openApplication
+    }
 
     func scan() -> MenuBarScanResult {
         guard AccessibilityPermissionService.isTrusted else {
@@ -234,10 +246,10 @@ final class MenuBarItemService {
 
     @discardableResult
     func activate(_ model: MenuBarItemModel) -> Bool {
-        guard AccessibilityPermissionService.isTrusted else { return false }
         if model.isHiddenOwnerFallback {
-            return activateHiddenOwner(model)
+            return applicationOpenHandler(model.ownerBundleIdentifier, model.ownerPID)
         }
+        guard accessibilityTrustProvider() else { return false }
 
         let candidates = menuBarElements(
             processIdentifier: model.ownerPID,
@@ -256,27 +268,19 @@ final class MenuBarItemService {
             return true
         }
 
-        guard let frame = resolved?.frame ?? model.accessibilityFrame else { return false }
+        guard let frame = resolved?.frame ?? model.accessibilityFrame else {
+            return applicationOpenHandler(model.ownerBundleIdentifier, model.ownerPID)
+        }
         return postClick(at: CGPoint(x: frame.midX, y: frame.midY))
     }
 
-    private func activateHiddenOwner(_ model: MenuBarItemModel) -> Bool {
-        if model.ownerBundleIdentifier.caseInsensitiveCompare("com.raycast.macos") == .orderedSame,
-           let raycastURL = URL(string: "raycast://"),
-           NSWorkspace.shared.open(raycastURL) {
-            return true
-        }
-
-        if let application = NSRunningApplication(processIdentifier: model.ownerPID) {
-            return application.activate(options: [.activateAllWindows])
-        }
-
-        guard let application = NSWorkspace.shared.runningApplications.first(where: {
-            $0.bundleIdentifier?.caseInsensitiveCompare(model.ownerBundleIdentifier) == .orderedSame
-        }), let bundleURL = application.bundleURL else {
-            return false
-        }
-        return NSWorkspace.shared.open(bundleURL)
+    private static func openApplication(bundleIdentifier: String, processIdentifier: pid_t) -> Bool {
+        let runningURL = NSRunningApplication(processIdentifier: processIdentifier)?.bundleURL
+        let installedURL = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: bundleIdentifier
+        )
+        guard let applicationURL = runningURL ?? installedURL else { return false }
+        return NSWorkspace.shared.open(applicationURL)
     }
 
     private func menuBarElements(
