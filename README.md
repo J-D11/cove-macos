@@ -1,11 +1,11 @@
 # Cove
 
-Cove is a native macOS utility that turns the area beneath a MacBook notch into a calm shelf for the menu-bar controls you choose and optional Now Playing artwork.
+Cove is a native macOS utility that turns the right edge of the screen into a calm, attached shelf for the menu-bar controls you choose, Now Playing, and a visual clipboard.
 
 ## What works
 
-- Hover near the notch to reveal the menu-bar strip.
-- Choose exactly which discovered menu-bar controls appear in Cove.
+- Hover over the slim right-edge handle to reveal Cove.
+- Choose which third-party menu extras appear in Cove while standard Apple status controls stay in the menu bar.
 - Drag chosen controls inside Cove to reorder them.
 - Check or uncheck Now Playing independently from the menu-bar controls.
 - Keep a visual history of copied plain text, rich text, images, and files with content-first previews, source context, timestamps, search, and pinned favorites.
@@ -26,13 +26,15 @@ Cove is a native macOS utility that turns the area beneath a MacBook notch into 
 
 Cove uses Accessibility to discover and open menu-bar items. Choosing an item adds its proxy to the shelf; clicking the proxy forwards activation to the real menu-bar control. BetterDisplay, Input, BUSY, and Raycast also remain available as app proxies when their menu-bar icons are disabled. Raycast uses its native app icon and opens through its `raycast://` URL when a direct status-item action is unavailable.
 
+Standard Apple controls such as Wi-Fi, Bluetooth, sound, battery, clock, and Control Center are intentionally omitted from Cove because macOS already keeps them available in the menu bar. Cove focuses its limited rail space on clipboard tools, Now Playing, Raycast, and the extra utilities the user chooses.
+
 ## Build and run
 
 ```sh
 ./script/build_and_run.sh
 ```
 
-The command builds the Swift package, creates a stable `dist/QuietDeck.app`, registers it with Launch Services, creates `dist/QuietDeck.app.zip`, signs it with an available Apple Development identity, verifies the app, and opens exactly one instance. The stable app path lets macOS retain Privacy & Security permissions between builds. It falls back to ad-hoc signing only when no development identity is installed.
+The command builds the Swift package, creates a stable signed bundle under Cove's user Application Support directory, exposes it through `dist/QuietDeck.app`, registers it with Launch Services, creates and verifies `dist/QuietDeck.app.zip`, and opens exactly one instance. Keeping the real bundle outside a File Provider-managed project directory prevents synced Finder metadata from invalidating strict signature checks while preserving a stable launch and Privacy & Security path. It falls back to ad-hoc signing only when no development identity is installed.
 
 Run tests with:
 
@@ -60,7 +62,7 @@ Choose **Enable Native Menu Appearance…** if you want Cove to mirror a control
 
 Choose **Check for Updates…** from the Cove menu to check the selected Stable or Beta GitHub release channel, or enable daily checks in **Settings → Updates**. Cove accepts only a versioned `.app.zip` from the trusted Cove repository, verifies the archive digest when GitHub provides one, validates the bundle identity and version, checks the code signature and Gatekeeper assessment, shows download progress, and then replaces and relaunches the current app. You can open the release notes before installing. An administrator confirmation may appear when Cove is installed in a protected location such as `/Applications`.
 
-**Show Cove** reveals the shelf temporarily. Only **Keep Shelf Open** pins the panel. With pinning off, the shelf begins closing 0.22 seconds after the pointer leaves the notch and panel. When a proxy opens a separate third-party popover, Cove holds its shelf steady for as long as that popover remains open.
+**Show Cove** reveals the shelf temporarily. Only **Keep Shelf Open** pins the panel. With pinning off, the shelf begins closing 0.22 seconds after the pointer leaves the right-edge handle and panel. When a proxy opens a separate third-party popover, Cove holds its shelf steady for as long as that popover remains open.
 
 Cove is not a general Dock or application launcher. The shelf contains selected menu-bar controls, known app proxies such as Raycast when their menu item is hidden, the visual clipboard, and Now Playing when those features are enabled.
 

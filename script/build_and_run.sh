@@ -9,11 +9,31 @@ BUNDLE_ID="com.astralworkslabs.QuietDeck"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
 APP_ARCHIVE="$DIST_DIR/$APP_NAME.app.zip"
-APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
+DIST_APP_LINK="$DIST_DIR/$APP_NAME.app"
+USER_APPLICATION_SUPPORT_DIR="${QUIET_DECK_APP_SUPPORT_DIR:-$(
+  /usr/bin/swift -e 'import Foundation; print(FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].path)'
+)}"
+RUN_BUNDLE_DIR="$USER_APPLICATION_SUPPORT_DIR/Cove/Development"
+APP_BUNDLE="$RUN_BUNDLE_DIR/$APP_NAME.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 SOURCE_PLIST="$ROOT_DIR/Sources/QuietDeck/Support/Info.plist"
 SOURCE_ICON="$ROOT_DIR/Sources/QuietDeck/Support/CoveIcon.icns"
 SIGNING_IDENTITY="${QUIET_DECK_SIGNING_IDENTITY:-}"
+
+verify_app_bundle() {
+  local bundle_path="$1"
+  for _ in {1..20}; do
+    /usr/bin/xattr -cr "$bundle_path"
+    /usr/bin/xattr -d com.apple.FinderInfo "$bundle_path" >/dev/null 2>&1 || true
+    /usr/bin/xattr -d 'com.apple.fileprovider.fpfs#P' "$bundle_path" >/dev/null 2>&1 || true
+    if /usr/bin/codesign --verify --deep --strict "$bundle_path" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.05
+  done
+
+  /usr/bin/codesign --verify --deep --strict --verbose=4 "$bundle_path"
+}
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 for _ in {1..40}; do
@@ -66,20 +86,36 @@ fi
 /usr/bin/codesign --verify --deep --strict "$STAGED_APP_BUNDLE"
 
 mkdir -p "$DIST_DIR"
-rm -rf "$APP_BUNDLE"
+mkdir -p "$RUN_BUNDLE_DIR"
+if [[ -e "$APP_BUNDLE" || -L "$APP_BUNDLE" ]]; then
+  /usr/bin/chflags -R nouchg "$APP_BUNDLE" >/dev/null 2>&1 || true
+  /bin/chmod -R u+w "$APP_BUNDLE" >/dev/null 2>&1 || true
+  rm -rf "$APP_BUNDLE"
+fi
 /usr/bin/ditto --norsrc "$STAGED_APP_BUNDLE" "$APP_BUNDLE"
-/usr/bin/xattr -cr "$APP_BUNDLE"
-/usr/bin/codesign --verify --deep --strict "$APP_BUNDLE"
+verify_app_bundle "$APP_BUNDLE"
 rm -f "$APP_ARCHIVE"
 /usr/bin/ditto --norsrc -c -k --keepParent "$APP_BUNDLE" "$APP_ARCHIVE"
 /usr/bin/ditto -x -k "$APP_ARCHIVE" "$ARCHIVE_VERIFY_ROOT"
 /usr/bin/codesign --verify --deep --strict "$ARCHIVE_VERIFY_ROOT/$APP_NAME.app"
+if [[ -e "$DIST_APP_LINK" || -L "$DIST_APP_LINK" ]]; then
+  /usr/bin/chflags -R nouchg "$DIST_APP_LINK" >/dev/null 2>&1 || true
+  /bin/chmod -R u+w "$DIST_APP_LINK" >/dev/null 2>&1 || true
+  rm -rf "$DIST_APP_LINK"
+fi
+# Documents may be managed by File Provider, which can attach Finder metadata
+# that invalidates strict code-signature verification. Keep the real bundle at
+# a stable local support path and retain dist/QuietDeck.app as a compatibility
+# link for launch commands and existing developer workflows.
+/bin/ln -s "$APP_BUNDLE" "$DIST_APP_LINK"
+/usr/bin/codesign --verify --deep --strict "$DIST_APP_LINK"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
   -f "$APP_BUNDLE" >/dev/null 2>&1 || true
 echo "Signed Cove with: $SIGNING_IDENTITY"
+echo "Runnable Cove: $DIST_APP_LINK -> $APP_BUNDLE"
 
 open_app() {
-  /usr/bin/open -n "$APP_BUNDLE"
+  /usr/bin/open -n "$DIST_APP_LINK"
 }
 
 case "$MODE" in
@@ -87,19 +123,22 @@ case "$MODE" in
     open_app
     ;;
   --preview|preview)
-    /usr/bin/open -n "$APP_BUNDLE" --args --preview
+    /usr/bin/open -n "$DIST_APP_LINK" --args --preview
+    ;;
+  --preview-spacious|preview-spacious)
+    /usr/bin/open -n "$DIST_APP_LINK" --args --preview-spacious
     ;;
   --request-access|request-access)
-    /usr/bin/open -n "$APP_BUNDLE" --args --request-access
+    /usr/bin/open -n "$DIST_APP_LINK" --args --request-access
     ;;
   --request-screen-recording|request-screen-recording)
-    /usr/bin/open -n "$APP_BUNDLE" --args --request-screen-recording
+    /usr/bin/open -n "$DIST_APP_LINK" --args --request-screen-recording
     ;;
   --diagnose-menu-items|diagnose-menu-items)
-    /usr/bin/open -n "$APP_BUNDLE" --args --diagnose-menu-items
+    /usr/bin/open -n "$DIST_APP_LINK" --args --diagnose-menu-items
     ;;
   --show-menu-items|show-menu-items)
-    /usr/bin/open -n "$APP_BUNDLE" --args --show-menu-items
+    /usr/bin/open -n "$DIST_APP_LINK" --args --show-menu-items
     ;;
   --debug|debug)
     lldb -- "$APP_BINARY"
@@ -119,7 +158,7 @@ case "$MODE" in
     [[ "$PROCESS_COUNT" == "1" ]]
     ;;
   *)
-    echo "usage: $0 [run|--preview|--request-access|--request-screen-recording|--diagnose-menu-items|--show-menu-items|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [run|--preview|--preview-spacious|--request-access|--request-screen-recording|--diagnose-menu-items|--show-menu-items|--debug|--logs|--telemetry|--verify]" >&2
     exit 2
     ;;
 esac

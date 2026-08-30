@@ -39,19 +39,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let updateService = UpdateService()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let ownPID = ProcessInfo.processInfo.processIdentifier
-        let otherCopies = NSRunningApplication.runningApplications(
-            withBundleIdentifier: Bundle.main.bundleIdentifier ?? "com.astralworkslabs.QuietDeck"
-        ).filter { $0.processIdentifier != ownPID }
-        for existingCopy in otherCopies {
-            logger.warning(
-                "Closing a duplicate Quiet Deck instance existingPID=\(existingCopy.processIdentifier, privacy: .public)"
+        let arguments = ProcessInfo.processInfo.arguments
+        let spaciousPreview = arguments.contains("--preview-spacious")
+        let previewMode = arguments.contains("--preview") || spaciousPreview
+        let runtimePolicy = CoveRuntimePolicy(isPreviewMode: previewMode)
+
+        if runtimePolicy.arbitratesRunningInstances {
+            let ownPID = ProcessInfo.processInfo.processIdentifier
+            let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.astralworkslabs.QuietDeck"
+            let otherCopies = NSRunningApplication.runningApplications(
+                withBundleIdentifier: bundleIdentifier
+            ).filter { $0.processIdentifier != ownPID }
+
+            let currentCandidate = CoveInstanceArbitrator.candidate(
+                processIdentifier: ownPID,
+                bundleURL: Bundle.main.bundleURL
             )
-            existingCopy.terminate()
+            let candidates = [currentCandidate].compactMap { $0 }
+                + otherCopies.compactMap { application in
+                    guard let bundleURL = application.bundleURL else { return nil }
+                    return CoveInstanceArbitrator.candidate(
+                        processIdentifier: application.processIdentifier,
+                        bundleURL: bundleURL
+                    )
+                }
+
+            if let preferred = CoveInstanceArbitrator.preferred(from: candidates),
+               preferred.processIdentifier != ownPID,
+               let preferredApplication = otherCopies.first(where: {
+                   $0.processIdentifier == preferred.processIdentifier
+               }) {
+                logger.warning(
+                    "Stopping this older Cove copy in favor of version \(preferred.version.description, privacy: .public) build \(preferred.build, privacy: .public)"
+                )
+                preferredApplication.activate()
+                NSApp.terminate(nil)
+                return
+            }
+
+            for existingCopy in otherCopies {
+                logger.warning(
+                    "Closing an older or duplicate Cove instance existingPID=\(existingCopy.processIdentifier, privacy: .public)"
+                )
+                existingCopy.terminate()
+            }
         }
 
         NSApp.setActivationPolicy(.accessory)
-        let previewMode = ProcessInfo.processInfo.arguments.contains("--preview")
         let store = ShelfStore.shared
         store.start(previewMode: previewMode)
 
@@ -59,12 +93,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             store.reveal(for: 30)
         }
 
-        let panelController = NotchPanelController(store: store, previewMode: previewMode)
+        let panelController = NotchPanelController(
+            store: store,
+            previewMode: previewMode,
+            layoutModeOverride: spaciousPreview ? .spacious : nil
+        )
         self.panelController = panelController
-        panelController.start()
-        installStatusItem()
-        installKeyboardShortcuts()
-        scheduleAutomaticUpdateCheckIfNeeded()
+        if runtimePolicy.installsSystemIntegrations {
+            // Publish the AppKit status item before the SwiftUI panel starts
+            // its first layout. Creating one while the host view is already
+            // laying out can intermittently re-enter AppKit on cold launch.
+            installStatusItem()
+            installKeyboardShortcuts()
+            scheduleAutomaticUpdateCheckIfNeeded()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { [weak panelController] in
+                panelController?.start()
+            }
+        } else {
+            panelController.start()
+        }
         logger.info("Launched accessibilityTrusted=\(store.accessibilityGranted, privacy: .public)")
 
         if ProcessInfo.processInfo.arguments.contains("--request-access"),
@@ -124,13 +171,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func installStatusItem() {
-        let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        if let button = statusItem.button {
-            button.image = CoveMark.image()
-            button.image?.isTemplate = true
-            button.toolTip = "Cove"
-        }
-
         let menu = NSMenu(title: "Cove")
         menu.delegate = self
 
@@ -166,7 +206,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         clipboardItemsItem.submenu = clipboardItemsMenu
         menu.addItem(clipboardItemsItem)
         self.clipboardItemsMenu = clipboardItemsMenu
-        rebuildClipboardItemsMenu()
 
         menu.addItem(makeMenuItem(title: "Show Cove", action: #selector(showMenuItems)))
         let menuItemsItem = NSMenuItem(title: "Menu Bar Items", action: nil, keyEquivalent: "")
@@ -174,7 +213,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menuItemsItem.submenu = menuItemsMenu
         menu.addItem(menuItemsItem)
         menuBarItemsMenu = menuItemsMenu
-        rebuildMenuBarItemsMenu()
         menu.addItem(.separator())
 
         let accessItem = makeMenuItem(title: "Enable Menu Access", action: #selector(requestMenuAccess))
@@ -216,8 +254,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let quitItem = makeMenuItem(title: "Quit Cove", action: #selector(quit), keyEquivalent: "q")
         menu.addItem(quitItem)
 
-        statusItem.menu = menu
+        // NSStatusBar starts laying out a new item immediately. Publish an
+        // empty slot first, then configure it after that initial AppKit pass;
+        // mutating the button or menu in the creation turn can re-enter layout.
+        let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         self.statusItem = statusItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self, weak statusItem] in
+            guard let self, let statusItem, self.statusItem === statusItem else { return }
+            statusItem.menu = menu
+            if let button = statusItem.button {
+                button.image = CoveMark.image()
+                button.image?.isTemplate = true
+                button.imagePosition = .imageOnly
+                button.toolTip = "Cove"
+            }
+        }
     }
 
     private func makeMenuItem(title: String, action: Selector, keyEquivalent: String = "") -> NSMenuItem {
@@ -273,14 +324,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let menu = menuBarItemsMenu else { return }
         menu.removeAllItems()
         let store = ShelfStore.shared
-        let unavailableItems = store.unavailableSelectedMenuItems
-        guard !store.menuItems.isEmpty || !unavailableItems.isEmpty else {
-            let emptyItem = NSMenuItem(title: "No menu-bar items found", action: nil, keyEquivalent: "")
+        let extraItems = store.coveExtraMenuItems
+        let unavailableItems = store.unavailableSelectedCoveExtraMenuItems
+        guard !extraItems.isEmpty || !unavailableItems.isEmpty else {
+            let emptyItem = NSMenuItem(title: "No extra items found", action: nil, keyEquivalent: "")
             emptyItem.isEnabled = false
             menu.addItem(emptyItem)
             return
         }
-        for itemModel in store.menuItems {
+        for itemModel in extraItems {
             let item = makeMenuItem(
                 title: itemModel.name,
                 action: #selector(toggleMenuBarItem(_:))
@@ -293,7 +345,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         if !unavailableItems.isEmpty {
-            if !store.menuItems.isEmpty {
+            if !extraItems.isEmpty {
                 menu.addItem(.separator())
             }
             let unavailableRoot = NSMenuItem(title: "Unavailable Items", action: nil, keyEquivalent: "")

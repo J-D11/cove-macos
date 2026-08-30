@@ -30,13 +30,14 @@ final class ShelfStore: ObservableObject {
     @Published private(set) var nativeSnapshotPassCompleted = false
     @Published private(set) var manualRevealDeadline = Date.distantPast
     @Published private(set) var externalMenuInteractionActive = false
+    @Published private(set) var sideWingLayoutMode: SideWingLayoutMode = .compact
     @Published var keepOpen: Bool {
-        didSet { UserDefaults.standard.set(keepOpen, forKey: Self.keepOpenKey) }
+        didSet { persistPreference(keepOpen, forKey: Self.keepOpenKey) }
     }
     @Published var showsNowPlaying: Bool {
         didSet {
             if !isApplyingShelfProfile {
-                UserDefaults.standard.set(showsNowPlaying, forKey: Self.showsNowPlayingKey)
+                persistPreference(showsNowPlaying, forKey: Self.showsNowPlayingKey)
             }
             if showsNowPlaying {
                 refreshNowPlaying()
@@ -48,7 +49,7 @@ final class ShelfStore: ObservableObject {
     @Published var showsVisualClipboard: Bool {
         didSet {
             if !isApplyingShelfProfile {
-                UserDefaults.standard.set(showsVisualClipboard, forKey: Self.showsVisualClipboardKey)
+                persistPreference(showsVisualClipboard, forKey: Self.showsVisualClipboardKey)
             }
             if !showsVisualClipboard {
                 isClipboardSearchPresented = false
@@ -59,7 +60,7 @@ final class ShelfStore: ObservableObject {
     }
     @Published var clipboardCapturePaused: Bool {
         didSet {
-            UserDefaults.standard.set(
+            persistPreference(
                 clipboardCapturePaused,
                 forKey: CovePreferences.clipboardCapturePausedKey
             )
@@ -68,7 +69,7 @@ final class ShelfStore: ObservableObject {
     }
     @Published var clipboardClearOnQuit: Bool {
         didSet {
-            UserDefaults.standard.set(
+            persistPreference(
                 clipboardClearOnQuit,
                 forKey: CovePreferences.clipboardClearOnQuitKey
             )
@@ -76,7 +77,7 @@ final class ShelfStore: ObservableObject {
     }
     @Published var clipboardPersistenceEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(
+            persistPreference(
                 clipboardPersistenceEnabled,
                 forKey: CovePreferences.clipboardPersistenceEnabledKey
             )
@@ -93,7 +94,7 @@ final class ShelfStore: ObservableObject {
                 clipboardHistoryLimit = clamped
                 return
             }
-            UserDefaults.standard.set(
+            persistPreference(
                 clipboardHistoryLimit,
                 forKey: CovePreferences.clipboardHistoryLimitKey
             )
@@ -106,7 +107,7 @@ final class ShelfStore: ObservableObject {
     }
     @Published var excludeCommonSensitiveApps: Bool {
         didSet {
-            UserDefaults.standard.set(
+            persistPreference(
                 excludeCommonSensitiveApps,
                 forKey: CovePreferences.excludeCommonSensitiveAppsKey
             )
@@ -114,7 +115,7 @@ final class ShelfStore: ObservableObject {
     }
     @Published var excludedClipboardBundleIdentifiersText: String {
         didSet {
-            UserDefaults.standard.set(
+            persistPreference(
                 excludedClipboardBundleIdentifiersText,
                 forKey: CovePreferences.excludedClipboardBundleIdentifiersKey
             )
@@ -122,7 +123,7 @@ final class ShelfStore: ObservableObject {
     }
     @Published var quickPasteShortcutsEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(
+            persistPreference(
                 quickPasteShortcutsEnabled,
                 forKey: CovePreferences.quickPasteShortcutsEnabledKey
             )
@@ -130,7 +131,7 @@ final class ShelfStore: ObservableObject {
     }
     @Published var automaticUpdateChecksEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(
+            persistPreference(
                 automaticUpdateChecksEnabled,
                 forKey: CovePreferences.automaticUpdateChecksEnabledKey
             )
@@ -138,7 +139,7 @@ final class ShelfStore: ObservableObject {
     }
     @Published var enhancedGlassContrast: Bool {
         didSet {
-            UserDefaults.standard.set(
+            persistPreference(
                 enhancedGlassContrast,
                 forKey: CovePreferences.enhancedGlassContrastKey
             )
@@ -151,7 +152,7 @@ final class ShelfStore: ObservableObject {
                 clipboardCollections = normalized
                 return
             }
-            UserDefaults.standard.set(
+            persistPreference(
                 clipboardCollections,
                 forKey: CovePreferences.clipboardCollectionsKey
             )
@@ -159,7 +160,7 @@ final class ShelfStore: ObservableObject {
     }
     @Published var perAppProfilesEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(
+            persistPreference(
                 perAppProfilesEnabled,
                 forKey: CovePreferences.perAppProfilesEnabledKey
             )
@@ -168,8 +169,8 @@ final class ShelfStore: ObservableObject {
     }
     @Published var updateChannel: CoveUpdateChannel {
         didSet {
-            UserDefaults.standard.set(updateChannel.rawValue, forKey: CovePreferences.updateChannelKey)
-            UserDefaults.standard.removeObject(forKey: CovePreferences.lastAutomaticUpdateCheckKey)
+            persistPreference(updateChannel.rawValue, forKey: CovePreferences.updateChannelKey)
+            removePersistentPreference(forKey: CovePreferences.lastAutomaticUpdateCheckKey)
         }
     }
 
@@ -199,7 +200,8 @@ final class ShelfStore: ObservableObject {
     private var nowPlayingRequestInFlight = false
     private var externalMenuMonitorTask: Task<Void, Never>?
     private var workspaceObservers: [NSObjectProtocol] = []
-    private var previewMode = false
+    private var runtimePolicy = CoveRuntimePolicy(isPreviewMode: false)
+    private var previewMode: Bool { runtimePolicy.isPreviewMode }
     private var draggedMenuItemID: String?
     private var lastMenuItemDropTargetID: String?
     private var clipboardUndoBuffer = ClipboardUndoBuffer()
@@ -296,6 +298,14 @@ final class ShelfStore: ObservableObject {
         return selectedMenuItemIDs.compactMap { itemsByID[$0] }
     }
 
+    var coveExtraMenuItems: [MenuBarItemModel] {
+        menuItems.filter(\.isCoveExtra)
+    }
+
+    var selectedCoveExtraMenuItems: [MenuBarItemModel] {
+        selectedMenuItems.filter(\.isCoveExtra)
+    }
+
     var unavailableSelectedMenuItems: [UnavailableMenuBarItem] {
         let availableIDs = Set(menuItems.map(\.selectionID))
         return selectedMenuItemIDs
@@ -306,6 +316,10 @@ final class ShelfStore: ObservableObject {
                     name: selectedMenuItemNames[$0] ?? "Unavailable item"
                 )
             }
+    }
+
+    var unavailableSelectedCoveExtraMenuItems: [UnavailableMenuBarItem] {
+        unavailableSelectedMenuItems.filter(\.isCoveExtra)
     }
 
     var filteredClipboardItems: [ClipboardItem] {
@@ -343,37 +357,27 @@ final class ShelfStore: ObservableObject {
         return "Scanned \(result.candidateCount) processes, found \(result.accessibilityOwnerCount) Accessibility owners, \(result.windowFallbackCount) window fallbacks, and \(result.items.count) total items."
     }
 
-    var preferredExpandedWidth: CGFloat {
-        let mediaWidth: CGFloat = showsNowPlaying && nowPlaying != nil ? 248 : 0
-        let clipboardWidth: CGFloat
-        if showsVisualClipboard {
-            clipboardWidth = ClipboardShelfLayout.width(
-                itemCount: isClipboardSearchPresented
-                    ? clipboardItems.count
-                    : filteredClipboardItems.count,
-                isSearchPresented: isClipboardSearchPresented
-            )
-        } else {
-            clipboardWidth = 0
-        }
-        let itemsWidth = selectedMenuItems.reduce(CGFloat.zero) { partial, item in
-            partial + min(max(item.nativeDisplayWidth + 12, 32), 104)
-        } + CGFloat(unavailableSelectedMenuItems.count) * 40
-        let contentWidth: CGFloat
-        if !accessibilityGranted || menuItems.isEmpty {
-            contentWidth = 190
-        } else if selectedMenuItems.isEmpty && unavailableSelectedMenuItems.isEmpty {
-            contentWidth = 160
-        } else {
-            contentWidth = min(itemsWidth, 520)
-        }
-        let sectionCount = [mediaWidth, clipboardWidth, contentWidth].filter { $0 > 0 }.count
-        let dividerWidth = CGFloat(max(sectionCount - 1, 0)) * 17
-        return min(max(mediaWidth + clipboardWidth + contentWidth + dividerWidth + 32, 250), 920)
+    var preferredSideWingHeight: CGFloat {
+        let metrics = SideWingGeometry.metrics(for: sideWingLayoutMode)
+        let selectedCount = selectedCoveExtraMenuItems.count
+            + unavailableSelectedCoveExtraMenuItems.count
+        let visibleMenuSlots = min(max(selectedCount, 2), 4)
+        let menuHeight = CGFloat(visibleMenuSlots) * 46
+        let nowPlayingHeight: CGFloat = showsNowPlaying && nowPlaying != nil ? 50 : 0
+        let height = 252 + nowPlayingHeight + menuHeight
+        return min(
+            max(height, metrics.minimumRailHeight),
+            metrics.maximumExpandedHeight
+        )
+    }
+
+    func updateSideWingLayoutMode(_ layoutMode: SideWingLayoutMode) {
+        guard sideWingLayoutMode != layoutMode else { return }
+        sideWingLayoutMode = layoutMode
     }
 
     func start(previewMode: Bool) {
-        self.previewMode = previewMode
+        runtimePolicy = CoveRuntimePolicy(isPreviewMode: previewMode)
         if previewMode {
             isPresented = true
             loadPreviewContent()
@@ -459,6 +463,10 @@ final class ShelfStore: ObservableObject {
         let scanResult = menuBarService.scan()
         lastScanResult = scanResult
         menuItems = scanResult.items
+        let extraSelectionIDs = coveExtraSelectionIDs(selectedMenuItemIDs)
+        if extraSelectionIDs != selectedMenuItemIDs {
+            persistSelectedMenuItemIDs(extraSelectionIDs)
+        }
         for item in scanResult.items where selectedMenuItemIDs.contains(item.selectionID) {
             selectedMenuItemNames[item.selectionID] = item.name
         }
@@ -469,10 +477,7 @@ final class ShelfStore: ObservableObject {
     }
 
     func requestAccessibility() {
-        let trusted = AccessibilityPermissionService.requestAccess()
-        if !trusted {
-            AccessibilityPermissionService.openSettings()
-        }
+        AccessibilityPermissionService.requestAccess()
         refreshPermissionState()
     }
 
@@ -733,6 +738,7 @@ final class ShelfStore: ObservableObject {
         captureClipboardUndoSnapshot()
         clipboardItems = []
         selectedClipboardItemID = nil
+        guard runtimePolicy.allowsPersistentChanges else { return }
         try? clipboardPersistenceService.clear()
     }
 
@@ -785,13 +791,17 @@ final class ShelfStore: ObservableObject {
         shelfProfiles.removeAll { $0.id == profile.id }
         shelfProfiles.append(profile)
         shelfProfiles.sort { $0.applicationName.localizedCaseInsensitiveCompare($1.applicationName) == .orderedAscending }
-        shelfProfileService.save(shelfProfiles)
+        if runtimePolicy.allowsPersistentChanges {
+            shelfProfileService.save(shelfProfiles)
+        }
         activeApplicationName = profile.applicationName
     }
 
     func removeShelfProfile(_ profile: ShelfProfile) {
         shelfProfiles.removeAll { $0.id == profile.id }
-        shelfProfileService.save(shelfProfiles)
+        if runtimePolicy.allowsPersistentChanges {
+            shelfProfileService.save(shelfProfiles)
+        }
         applyProfileForFrontmostApplication()
     }
 
@@ -963,7 +973,7 @@ final class ShelfStore: ObservableObject {
     }
 
     private func refreshNowPlaying() {
-        guard showsNowPlaying, !nowPlayingRequestInFlight else { return }
+        guard !previewMode, showsNowPlaying, !nowPlayingRequestInFlight else { return }
         nowPlayingRequestInFlight = true
         nowPlayingService.fetch { [weak self] item in
             guard let self else { return }
@@ -977,11 +987,22 @@ final class ShelfStore: ObservableObject {
         saveSelectedMenuItemIDs()
     }
 
+    private func coveExtraSelectionIDs(_ ids: [String]) -> [String] {
+        let redundantSystemIDs = Set(
+            menuItems
+                .filter { !$0.isCoveExtra }
+                .map(\.selectionID)
+        )
+        return MenuBarSelection.normalizedIDs(ids).filter {
+            !redundantSystemIDs.contains($0)
+        }
+    }
+
     private func saveSelectedMenuItemIDs() {
         selectedMenuItemNames = selectedMenuItemNames.filter {
             selectedMenuItemIDs.contains($0.key)
         }
-        UserDefaults.standard.set(selectedMenuItemIDs, forKey: Self.selectedMenuItemIDsKey)
+        persistPreference(selectedMenuItemIDs, forKey: Self.selectedMenuItemIDsKey)
         persistSelectedMenuItemNames()
     }
 
@@ -1053,7 +1074,7 @@ final class ShelfStore: ObservableObject {
             return
         }
         isApplyingShelfProfile = true
-        selectedMenuItemIDs = MenuBarSelection.normalizedIDs(profile.selectedMenuItemIDs)
+        selectedMenuItemIDs = coveExtraSelectionIDs(profile.selectedMenuItemIDs)
         selectedMenuItemNames.merge(profile.selectedMenuItemNames) { _, profileValue in profileValue }
         showsNowPlaying = profile.showsNowPlaying
         showsVisualClipboard = profile.showsVisualClipboard
@@ -1064,7 +1085,7 @@ final class ShelfStore: ObservableObject {
 
     private func restoreDefaultShelfConfiguration() {
         isApplyingShelfProfile = true
-        selectedMenuItemIDs = MenuBarSelection.normalizedIDs(
+        selectedMenuItemIDs = coveExtraSelectionIDs(
             UserDefaults.standard.stringArray(forKey: Self.selectedMenuItemIDsKey) ?? []
         )
         selectedMenuItemNames = UserDefaults.standard.dictionary(
@@ -1103,7 +1124,7 @@ final class ShelfStore: ObservableObject {
     }
 
     private func persistSelectedMenuItemNames() {
-        UserDefaults.standard.set(
+        persistPreference(
             selectedMenuItemNames,
             forKey: CovePreferences.selectedMenuItemNamesKey
         )
@@ -1134,6 +1155,7 @@ final class ShelfStore: ObservableObject {
     }
 
     private func persistClipboardHistory() {
+        guard runtimePolicy.allowsPersistentChanges else { return }
         let itemsToPersist = ClipboardHistory.itemsToPersist(
             from: clipboardItems,
             includesRecentHistory: clipboardPersistenceEnabled
@@ -1151,34 +1173,67 @@ final class ShelfStore: ObservableObject {
         }
     }
 
+    private func persistPreference(_ value: Any?, forKey key: String) {
+        guard runtimePolicy.allowsPersistentChanges else { return }
+        UserDefaults.standard.set(value, forKey: key)
+    }
+
+    private func removePersistentPreference(forKey key: String) {
+        guard runtimePolicy.allowsPersistentChanges else { return }
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
     private func loadPreviewContent() {
         accessibilityGranted = true
         screenRecordingGranted = true
         nativeSnapshotPassCompleted = true
+        let raycastApplication = NSRunningApplication.runningApplications(
+            withBundleIdentifier: "com.raycast.macos"
+        ).first
+        let raycastURL = raycastApplication?.bundleURL ?? NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: "com.raycast.macos"
+        )
         menuItems = [
+            previewMenuItem(
+                id: "raycast",
+                name: "Raycast",
+                symbol: nil,
+                ownerBundleIdentifier: "com.raycast.macos",
+                ownerPID: raycastApplication?.processIdentifier ?? 0,
+                ownerIcon: raycastURL.map { NSWorkspace.shared.icon(forFile: $0.path) },
+                isHiddenOwnerFallback: true
+            ),
             previewMenuItem(id: "wifi", name: "Wi-Fi", symbol: "wifi"),
+            previewMenuItem(
+                id: "bluetooth",
+                name: "Bluetooth",
+                symbol: "antenna.radiowaves.left.and.right"
+            ),
             previewMenuItem(id: "sound", name: "Sound", symbol: "speaker.wave.2.fill"),
             previewMenuItem(id: "battery", name: "Battery", symbol: "battery.75percent", value: "85%")
         ]
-        selectedMenuItemIDs = menuItems.map(\.selectionID)
+        selectedMenuItemIDs = coveExtraMenuItems.map(\.selectionID)
         showsNowPlaying = true
         showsVisualClipboard = true
+        let previewLandscape = NSImage(
+            contentsOfFile: "/System/Library/Desktop Pictures/.thumbnails/The Desert.heic"
+        ) ?? NSImage(
+            systemSymbolName: "photo.fill",
+            accessibilityDescription: "Sample image"
+        ) ?? NSImage(size: NSSize(width: 32, height: 32))
         clipboardItems = [
-            ClipboardItem(content: .text("Launch notes")),
             ClipboardItem(
-                content: .image(
-                    NSImage(
-                        systemSymbolName: "photo.fill",
-                        accessibilityDescription: "Sample image"
-                    ) ?? NSImage(size: NSSize(width: 32, height: 32))
+                content: .text(
+                    "In the midst of winter, I found there was, within me, an invincible summer."
                 )
             ),
+            ClipboardItem(content: .image(previewLandscape)),
             ClipboardItem(content: .files([URL(fileURLWithPath: "/tmp/Cove-Mockup.pdf")]))
         ]
         nowPlaying = NowPlayingItem(
-            title: "The Creative Act",
-            artist: "Rick Rubin",
-            album: "An Audiobook",
+            title: "Neuromancer",
+            artist: "William Gibson",
+            album: "Audiobook",
             artwork: nil,
             source: .spotify,
             isPlaying: true,
@@ -1186,19 +1241,29 @@ final class ShelfStore: ObservableObject {
         )
     }
 
-    private func previewMenuItem(id: String, name: String, symbol: String, value: String? = nil) -> MenuBarItemModel {
+    private func previewMenuItem(
+        id: String,
+        name: String,
+        symbol: String?,
+        value: String? = nil,
+        ownerBundleIdentifier: String = "com.apple.controlcenter",
+        ownerPID: pid_t = 0,
+        ownerIcon: NSImage? = nil,
+        isHiddenOwnerFallback: Bool = false
+    ) -> MenuBarItemModel {
         MenuBarItemModel(
             id: id,
-            ownerBundleIdentifier: "com.apple.controlcenter",
-            ownerPID: 0,
+            ownerBundleIdentifier: ownerBundleIdentifier,
+            ownerPID: ownerPID,
             itemIdentifier: id,
             itemIndex: 0,
             name: name,
             symbolName: symbol,
-            ownerIcon: nil,
+            ownerIcon: ownerIcon,
             compactValue: value,
             accessibilityFrame: nil,
-            xPosition: 0
+            xPosition: 0,
+            isHiddenOwnerFallback: isHiddenOwnerFallback
         )
     }
 

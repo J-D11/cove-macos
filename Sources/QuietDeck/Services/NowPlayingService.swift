@@ -44,6 +44,7 @@ final class NowPlayingService {
 
     private let getNowPlayingInfo: GetNowPlayingInfo?
     private let spotifyService = SpotifyNowPlayingService()
+    private var nextSystemLookupDate = Date.distantPast
 
     init() {
         let frameworkPath = "/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote"
@@ -61,7 +62,21 @@ final class NowPlayingService {
             if let item {
                 completion(item)
             } else {
-                self.fetchSystemNowPlaying(completion: completion)
+                let now = Date()
+                guard NowPlayingLookupPolicy.canAttemptLookup(
+                    at: now,
+                    nextEligibleDate: self.nextSystemLookupDate
+                ) else {
+                    completion(nil)
+                    return
+                }
+                self.fetchSystemNowPlaying { [weak self] item in
+                    self?.nextSystemLookupDate = NowPlayingLookupPolicy.nextEligibleDate(
+                        after: Date(),
+                        foundItem: item != nil
+                    )
+                    completion(item)
+                }
             }
         }
     }

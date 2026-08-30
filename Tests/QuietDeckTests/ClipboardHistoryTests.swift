@@ -145,6 +145,16 @@ final class ClipboardHistoryTests: XCTestCase {
         XCTAssertEqual(item.previewTitle, "Launch notes for the new shelf")
     }
 
+    func testFreshClipboardItemUsesStableNowLabel() {
+        let referenceDate = Date(timeIntervalSince1970: 1_000)
+        let item = ClipboardItem(
+            content: .text("Fresh"),
+            createdAt: referenceDate.addingTimeInterval(5)
+        )
+
+        XCTAssertEqual(item.ageDescription(relativeTo: referenceDate), "Now")
+    }
+
     func testPreviewTitleShowsCopiedFileNames() {
         let item = ClipboardItem(content: .files([
             URL(fileURLWithPath: "/tmp/Cove-one.txt"),

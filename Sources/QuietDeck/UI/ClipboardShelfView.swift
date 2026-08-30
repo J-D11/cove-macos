@@ -316,6 +316,375 @@ struct ClipboardShelfView: View {
     }
 }
 
+struct SideWingClipboardView: View {
+    @ObservedObject var store: ShelfStore
+    let itemListHeight: CGFloat
+    @State private var isDropTargeted = false
+    @FocusState private var isSearchFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
+                .modifier(
+                    ClipboardGlassSurface(
+                        isInteractive: true,
+                        isHighlighted: store.isClipboardSearchPresented,
+                        isSelected: false,
+                        usesEnhancedContrast: store.enhancedGlassContrast
+                    )
+                )
+
+            Group {
+                if store.clipboardItems.isEmpty {
+                    emptyDropState
+                } else if store.filteredClipboardItems.isEmpty {
+                    noResultsState
+                } else {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 8) {
+                            ForEach(store.filteredClipboardItems) { item in
+                                SideWingClipboardItemRow(store: store, item: item)
+                            }
+                        }
+                        .padding(.horizontal, 1)
+                        .padding(.vertical, 1)
+                    }
+                    .frame(height: itemListHeight)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .onDrop(
+            of: [.fileURL, .image, .plainText],
+            isTargeted: $isDropTargeted,
+            perform: store.importClipboardProviders
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Visual clipboard")
+    }
+
+    private var header: some View {
+        HStack(spacing: 6) {
+            ZStack(alignment: .leading) {
+                HStack(spacing: 8) {
+                    Text("Clipboard")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.primary.opacity(0.94))
+
+                    Text(itemCountLabel)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.primary.opacity(0.48))
+                }
+                .opacity(store.isClipboardSearchPresented ? 0 : 1)
+
+                TextField("Search clipboard", text: $store.clipboardSearchQuery)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .focused($isSearchFocused)
+                    .padding(.horizontal, 9)
+                    .frame(height: 25)
+                    .background(.primary.opacity(0.075), in: Capsule())
+                    .opacity(store.isClipboardSearchPresented ? 1 : 0)
+                    .allowsHitTesting(store.isClipboardSearchPresented)
+                    .accessibilityLabel("Search clipboard history")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(
+                .smooth(duration: 0.24, extraBounce: 0),
+                value: store.isClipboardSearchPresented
+            )
+
+            Button {
+                toggleSearch()
+            } label: {
+                Image(
+                    systemName: store.isClipboardSearchPresented
+                        ? "xmark"
+                        : "magnifyingglass"
+                )
+                .font(.system(size: 10.5, weight: .semibold))
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(
+                store.isClipboardSearchPresented
+                    ? "Close clipboard search"
+                    : "Search clipboard history"
+            )
+
+            Menu {
+                Button("All Items") {
+                    store.clipboardCollectionFilter = nil
+                }
+                Button("Saved") {
+                    store.clipboardCollectionFilter = ShelfStore.savedCollectionFilter
+                }
+                if !store.clipboardCollections.isEmpty {
+                    Divider()
+                    ForEach(store.clipboardCollections, id: \.self) { collection in
+                        Button(collection) {
+                            store.clipboardCollectionFilter = collection
+                        }
+                    }
+                }
+                Divider()
+                Button("Undo Delete") {
+                    store.undoClipboardChange()
+                }
+                .disabled(!store.canUndoClipboardChange)
+                Button(
+                    store.clipboardCapturePaused ? "Resume Capture" : "Pause Capture"
+                ) {
+                    store.toggleClipboardCapturePaused()
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 11, weight: .bold))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Clipboard options")
+        }
+        .frame(height: 26)
+    }
+
+    private var emptyDropState: some View {
+        Label("Drop to save", systemImage: "square.and.arrow.down")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(.primary.opacity(0.66))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .modifier(
+                ClipboardGlassSurface(
+                    isInteractive: false,
+                    isHighlighted: isDropTargeted,
+                    isSelected: false,
+                    usesEnhancedContrast: store.enhancedGlassContrast
+                )
+            )
+    }
+
+    private var noResultsState: some View {
+        Label("No matches", systemImage: "magnifyingglass")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(.primary.opacity(0.66))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .modifier(
+                ClipboardGlassSurface(
+                    isInteractive: false,
+                    isHighlighted: false,
+                    isSelected: false,
+                    usesEnhancedContrast: store.enhancedGlassContrast
+                )
+            )
+    }
+
+    private var itemCountLabel: String {
+        let count = store.filteredClipboardItems.count
+        return count == 1 ? "1 item" : "\(count) items"
+    }
+
+    private func toggleSearch() {
+        let willShowSearch = !store.isClipboardSearchPresented
+        withAnimation(.smooth(duration: 0.24, extraBounce: 0)) {
+            store.isClipboardSearchPresented = willShowSearch
+        }
+        if willShowSearch {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
+                isSearchFocused = true
+            }
+        } else {
+            isSearchFocused = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                guard !store.isClipboardSearchPresented else { return }
+                store.clipboardSearchQuery = ""
+            }
+        }
+    }
+}
+
+private struct SideWingClipboardItemRow: View {
+    @ObservedObject var store: ShelfStore
+    let item: ClipboardItem
+    @State private var isHovering = false
+    @State private var isPreviewVisible = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button {
+                store.selectClipboardItem(item)
+                store.copyClipboardItem(item)
+            } label: {
+                HStack(spacing: 10) {
+                    preview
+                        .frame(width: 36, height: 36)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(item.previewTitle)
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(.primary.opacity(0.94))
+                            .lineLimit(item.plainText == nil ? 1 : 2)
+                            .truncationMode(.tail)
+
+                        if item.plainText == nil {
+                            Text(item.previewDetail)
+                                .font(.system(size: 9.5, weight: .medium))
+                                .foregroundStyle(.primary.opacity(0.50))
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.leading, 9)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onDrag { item.itemProvider() }
+            .help("Copy \(item.title) to the clipboard")
+
+            Button {
+                store.toggleClipboardItemPinned(item)
+            } label: {
+                Image(systemName: item.isPinned ? "bookmark.fill" : "bookmark")
+                    .font(.system(size: 10.5, weight: .bold))
+                    .foregroundStyle(
+                        item.isPinned
+                            ? Color.accentColor
+                            : Color.primary.opacity(0.70)
+                    )
+                    .frame(width: 34, height: 60)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(item.isPinned ? "Remove from Saved" : "Save for Search")
+            .accessibilityLabel(item.isPinned ? "Remove from Saved" : "Save for Search")
+        }
+        .frame(height: 62)
+        .modifier(
+            ClipboardGlassSurface(
+                isInteractive: true,
+                isHighlighted: isHovering,
+                isSelected: store.selectedClipboardItem?.id == item.id,
+                usesEnhancedContrast: store.enhancedGlassContrast
+            )
+        )
+        .contentShape(Rectangle())
+        .onHover {
+            isHovering = $0
+            if $0 {
+                store.selectClipboardItem(item)
+            }
+        }
+        .popover(isPresented: $isPreviewVisible, arrowEdge: .trailing) {
+            ClipboardItemPreview(item: item)
+        }
+        .contextMenu {
+            Button("Copy to Clipboard") {
+                store.copyClipboardItem(item)
+            }
+            Button("Paste Now") {
+                store.pasteClipboardItem(item)
+            }
+            Button("Preview") {
+                isPreviewVisible = true
+            }
+            if !store.smartActions(for: item).isEmpty {
+                Menu("Smart Actions") {
+                    ForEach(store.smartActions(for: item)) { action in
+                        Button {
+                            store.performSmartAction(action, for: item)
+                        } label: {
+                            Label(action.title, systemImage: action.symbolName)
+                        }
+                    }
+                }
+            }
+            Menu("Collection") {
+                Button("No Collection") {
+                    store.assignClipboardItem(item, toCollection: nil)
+                }
+                Divider()
+                ForEach(store.clipboardCollections, id: \.self) { collection in
+                    Button(collection) {
+                        store.assignClipboardItem(item, toCollection: collection)
+                    }
+                }
+            }
+            Menu("Delete Automatically") {
+                Button("Never") {
+                    store.setClipboardItemExpiration(item, expiresAt: nil)
+                }
+                Button("After One Paste") {
+                    store.setClipboardItemExpiration(
+                        item,
+                        expiresAt: nil,
+                        removesAfterPaste: true
+                    )
+                }
+                Button("In 10 Minutes") {
+                    store.setClipboardItemExpiration(
+                        item,
+                        expiresAt: Date().addingTimeInterval(10 * 60)
+                    )
+                }
+                Button("In One Hour") {
+                    store.setClipboardItemExpiration(
+                        item,
+                        expiresAt: Date().addingTimeInterval(60 * 60)
+                    )
+                }
+                Button("Tomorrow") {
+                    store.setClipboardItemExpiration(
+                        item,
+                        expiresAt: Date().addingTimeInterval(24 * 60 * 60)
+                    )
+                }
+            }
+            Button(item.isPinned ? "Remove from Saved" : "Save for Search") {
+                store.toggleClipboardItemPinned(item)
+            }
+            Button("Remove") {
+                store.removeClipboardItem(item)
+            }
+            Divider()
+            Button("Clear Clipboard History") {
+                store.clearClipboardHistory()
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(item.previewTitle)
+        .accessibilityValue(item.previewDetail)
+    }
+
+    @ViewBuilder
+    private var preview: some View {
+        if let image = item.image {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fill)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else {
+            Image(systemName: item.symbolName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.primary.opacity(0.86))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(.white.opacity(0.06))
+                )
+        }
+    }
+}
+
 private struct ClipboardItemCard: View {
     let item: ClipboardItem
     let isSelected: Bool

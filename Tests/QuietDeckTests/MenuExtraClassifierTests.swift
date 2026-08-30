@@ -13,6 +13,14 @@ final class MenuExtraClassifierTests: XCTestCase {
         )
         XCTAssertEqual(
             MenuExtraClassifier.symbolName(
+                identifier: "com.apple.menuextra.bluetooth",
+                label: "Bluetooth",
+                ownerBundleIdentifier: "com.apple.controlcenter"
+            ),
+            "antenna.radiowaves.left.and.right"
+        )
+        XCTAssertEqual(
+            MenuExtraClassifier.symbolName(
                 identifier: "com.apple.menuextra.battery",
                 label: "Battery 85%",
                 ownerBundleIdentifier: "com.apple.controlcenter"
@@ -27,6 +35,45 @@ final class MenuExtraClassifierTests: XCTestCase {
                 identifier: "com.example.vpn.status",
                 label: "Connected",
                 ownerBundleIdentifier: "com.example.vpn"
+            )
+        )
+    }
+
+    func testHidesSystemControlsAlreadyAvailableInTheMenuBar() {
+        let controls = [
+            ("com.apple.menuextra.wifi", "Wi-Fi"),
+            ("com.apple.menuextra.bluetooth", "Bluetooth"),
+            ("com.apple.menuextra.battery", "Battery 85%"),
+            ("com.apple.menuextra.volume", "Sound"),
+            ("com.apple.menuextra.clock", "Date and Time"),
+            ("com.apple.controlcenter", "Control Center")
+        ]
+
+        for (identifier, label) in controls {
+            XCTAssertTrue(
+                MenuExtraClassifier.isRedundantSystemControl(
+                    identifier: identifier,
+                    label: label,
+                    ownerBundleIdentifier: "com.apple.controlcenter"
+                ),
+                "Expected \(label) to stay in the macOS menu bar instead of Cove"
+            )
+        }
+    }
+
+    func testKeepsThirdPartyAndUnknownAppleExtras() {
+        XCTAssertFalse(
+            MenuExtraClassifier.isRedundantSystemControl(
+                identifier: "raycast",
+                label: "Raycast",
+                ownerBundleIdentifier: "com.raycast.macos"
+            )
+        )
+        XCTAssertFalse(
+            MenuExtraClassifier.isRedundantSystemControl(
+                identifier: "com.apple.developerutility.status",
+                label: "Developer Utility",
+                ownerBundleIdentifier: "com.apple.developerutility"
             )
         )
     }

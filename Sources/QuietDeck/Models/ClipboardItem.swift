@@ -97,9 +97,16 @@ struct ClipboardItem: Identifiable {
     }
 
     var ageDescription: String {
+        ageDescription(relativeTo: Date())
+    }
+
+    func ageDescription(relativeTo referenceDate: Date) -> String {
+        if abs(referenceDate.timeIntervalSince(createdAt)) < 45 {
+            return "Now"
+        }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: createdAt, relativeTo: Date())
+        return formatter.localizedString(for: createdAt, relativeTo: referenceDate)
     }
 
     var previewTitle: String {

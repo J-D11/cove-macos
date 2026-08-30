@@ -25,6 +25,56 @@ enum MenuExtraClassifier {
         dedicatedOwnerIconResource(ownerBundleIdentifier: ownerBundleIdentifier) != nil
     }
 
+    static func isRedundantSystemControl(
+        identifier: String?,
+        label: String,
+        ownerBundleIdentifier: String
+    ) -> Bool {
+        let ownerBundleIdentifier = ownerBundleIdentifier.lowercased()
+        guard ownerBundleIdentifier.hasPrefix("com.apple.") else {
+            return false
+        }
+
+        if ownerBundleIdentifier == "com.apple.controlcenter" {
+            return true
+        }
+
+        let haystack = [identifier ?? "", label]
+            .joined(separator: " ")
+            .lowercased()
+        let words = Set(
+            haystack
+                .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .map(String.init)
+        )
+
+        return haystack.contains("wifi")
+            || haystack.contains("wi-fi")
+            || haystack.contains("airdrop")
+            || haystack.contains("airplay")
+            || haystack.contains("screenmirroring")
+            || haystack.contains("screen mirroring")
+            || haystack.contains("timemachine")
+            || haystack.contains("time machine")
+            || haystack.contains("nowplaying")
+            || words.contains("bluetooth")
+            || words.contains("battery")
+            || words.contains("volume")
+            || words.contains("sound")
+            || words.contains("focus")
+            || words.contains("dnd")
+            || words.contains("vpn")
+            || words.contains("siri")
+            || words.contains("clock")
+            || words.contains("date")
+            || words.contains("controlcenter")
+            || (words.contains("control") && words.contains("center"))
+            || words.contains("keyboard")
+            || words.contains("input")
+            || words.contains("display")
+            || (words.contains("now") && words.contains("playing"))
+    }
+
     static func symbolName(identifier: String?, label: String, ownerBundleIdentifier: String) -> String? {
         let haystack = [identifier ?? "", label]
             .joined(separator: " ")
@@ -48,7 +98,7 @@ enum MenuExtraClassifier {
         }
 
         if haystack.contains("wifi") || haystack.contains("wi-fi") { return "wifi" }
-        if haystack.contains("bluetooth") { return "bluetooth" }
+        if haystack.contains("bluetooth") { return "antenna.radiowaves.left.and.right" }
         if haystack.contains("battery") { return "battery.75percent" }
         if haystack.contains("volume") || haystack.contains("sound") { return "speaker.wave.2.fill" }
         if haystack.contains("focus") || haystack.contains("dnd") { return "moon.fill" }

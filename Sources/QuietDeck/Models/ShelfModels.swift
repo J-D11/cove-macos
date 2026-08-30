@@ -63,6 +63,14 @@ struct MenuBarItemModel: Identifiable {
             ownerBundleIdentifier: ownerBundleIdentifier
         )
     }
+
+    var isCoveExtra: Bool {
+        !MenuExtraClassifier.isRedundantSystemControl(
+            identifier: itemIdentifier,
+            label: name,
+            ownerBundleIdentifier: ownerBundleIdentifier
+        )
+    }
 }
 
 struct UnavailableMenuBarItem: Identifiable {
@@ -71,6 +79,14 @@ struct UnavailableMenuBarItem: Identifiable {
 
     var ownerBundleIdentifier: String {
         id.split(separator: "::", maxSplits: 1).first.map(String.init) ?? id
+    }
+
+    var isCoveExtra: Bool {
+        !MenuExtraClassifier.isRedundantSystemControl(
+            identifier: id,
+            label: name,
+            ownerBundleIdentifier: ownerBundleIdentifier
+        )
     }
 }
 

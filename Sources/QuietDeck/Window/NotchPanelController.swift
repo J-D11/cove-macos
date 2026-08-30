@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import QuartzCore
 import SwiftUI
 
@@ -13,6 +14,7 @@ final class NotchPanelController {
 
     private let store: ShelfStore
     private let previewMode: Bool
+    private let layoutModeOverride: SideWingLayoutMode?
     private var panel: QuietDeckPanel?
     private var hoverTimer: Timer?
     private var lastInsideDate = Date.distantPast
@@ -20,9 +22,14 @@ final class NotchPanelController {
     private var targetExpanded = false
     private var targetPanelFrame: CGRect?
 
-    init(store: ShelfStore, previewMode: Bool) {
+    init(
+        store: ShelfStore,
+        previewMode: Bool,
+        layoutModeOverride: SideWingLayoutMode? = nil
+    ) {
         self.store = store
         self.previewMode = previewMode
+        self.layoutModeOverride = layoutModeOverride
     }
 
     func start() {
@@ -50,19 +57,33 @@ final class NotchPanelController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         // NSPanel shadows follow the rectangular window bounds instead of the
-        // SwiftUI surface. Quiet Deck draws its depth inside the rounded shape.
+        // SwiftUI surface. Cove draws its depth inside the attached wing shape.
         panel.hasShadow = false
         panel.animationBehavior = .none
         panel.isMovable = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         let hostingView = NSHostingView(rootView: QuietDeckView(store: store))
+        // The panel controller is the single source of truth for the window
+        // frame. Letting NSHostingView also publish an intrinsic size can make
+        // AppKit re-enter layout while the side wing is resizing.
+        hostingView.sizingOptions = []
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
         hostingView.layerContentsRedrawPolicy = .onSetNeedsDisplay
         panel.contentView = hostingView
-        panel.orderFrontRegardless()
         self.panel = panel
+        // Give SwiftUI and the status-item host enough time to finish their
+        // first layout before WindowServer publishes the panel scene. A single
+        // run-loop turn is not deterministic during a cold LaunchServices
+        // launch and can still overlap AppKit's initial layout pass.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak panel] in
+            panel?.orderFrontRegardless()
+            // Suppress only the initial order animation. Subsequent explicit
+            // frame animations need a non-none behavior or AppKit accepts the
+            // animator target without ever moving the panel.
+            panel?.animationBehavior = .utilityWindow
+        }
 
         if previewMode {
             store.isPresented = true
@@ -98,12 +119,12 @@ final class NotchPanelController {
 
         let cursor = NSEvent.mouseLocation
         let screen = targetScreen()
-        let triggerFrame = NotchGeometry.triggerFrame(
+        let triggerFrame = SideWingGeometry.triggerFrame(
             screenFrame: screen.frame,
-            topInset: screen.safeAreaInsets.top,
-            notchWidth: notchWidth(on: screen)
+            visibleFrame: screen.visibleFrame
         )
-        let inside = triggerFrame.contains(cursor) || panel.frame.insetBy(dx: -8, dy: -10).contains(cursor)
+        let inside = triggerFrame.contains(cursor)
+            || panel.frame.insetBy(dx: -10, dy: -12).contains(cursor)
 
         let now = Date()
         if inside {
@@ -118,10 +139,15 @@ final class NotchPanelController {
                 lastInsideDate: lastInsideDate,
                 manualRevealDeadline: store.manualRevealDeadline,
                 now: now
-            )
+        )
         if shouldPresent != store.isPresented {
             store.isPresented = shouldPresent
-            updatePanelFrame(animated: true)
+            // Let SwiftUI commit the presentation-state layout before AppKit
+            // begins resizing the host window. Doing both in the same layout
+            // turn can trigger AppKit's layout-recursion warning.
+            DispatchQueue.main.async { [weak self] in
+                self?.updatePanelFrame(animated: true)
+            }
         } else if shouldPresent {
             updatePanelFrame(animated: true)
         }
@@ -146,8 +172,8 @@ final class NotchPanelController {
                     ? ShelfPresentationPolicy.appearanceAnimationDuration
                     : ShelfPresentationPolicy.disappearanceAnimationDuration
                 context.timingFunction = expanded
-                    ? CAMediaTimingFunction(controlPoints: 0.20, 0.88, 0.24, 1.00)
-                    : CAMediaTimingFunction(controlPoints: 0.36, 0.00, 0.20, 1.00)
+                    ? CAMediaTimingFunction(controlPoints: 0.16, 1.00, 0.30, 1.00)
+                    : CAMediaTimingFunction(controlPoints: 0.32, 0.00, 0.20, 1.00)
                 context.allowsImplicitAnimation = true
                 panel.animator().setFrame(targetFrame, display: true)
             }
@@ -161,13 +187,37 @@ final class NotchPanelController {
 
     private func resolvedPanelFrame(expanded: Bool) -> CGRect {
         let screen = targetScreen()
-        return NotchGeometry.panelFrame(
+        let layoutMode = resolvedLayoutMode(for: screen)
+        store.updateSideWingLayoutMode(layoutMode)
+        return SideWingGeometry.panelFrame(
             screenFrame: screen.frame,
-            topInset: screen.safeAreaInsets.top,
-            notchWidth: notchWidth(on: screen),
+            visibleFrame: screen.visibleFrame,
             expanded: expanded,
-            expandedWidth: expanded ? store.preferredExpandedWidth : nil
+            expandedHeight: expanded ? store.preferredSideWingHeight : nil,
+            layoutMode: layoutMode
         )
+    }
+
+    private func resolvedLayoutMode(for screen: NSScreen) -> SideWingLayoutMode {
+        if let layoutModeOverride {
+            return layoutModeOverride
+        }
+
+        let externalDisplayCount = NSScreen.screens.filter {
+            !isBuiltInDisplay($0)
+        }.count
+        return SideWingGeometry.layoutMode(
+            isBuiltInDisplay: isBuiltInDisplay(screen),
+            externalDisplayCount: externalDisplayCount
+        )
+    }
+
+    private func isBuiltInDisplay(_ screen: NSScreen) -> Bool {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        guard let number = screen.deviceDescription[key] as? NSNumber else {
+            return screen.safeAreaInsets.top > 0
+        }
+        return CGDisplayIsBuiltin(CGDirectDisplayID(number.uint32Value)) != 0
     }
 
     private func targetScreen() -> NSScreen {
@@ -176,12 +226,4 @@ final class NotchPanelController {
         } ?? NSScreen.main ?? NSScreen.screens[0]
     }
 
-    private func notchWidth(on screen: NSScreen) -> CGFloat? {
-        guard let left = screen.auxiliaryTopLeftArea,
-              let right = screen.auxiliaryTopRightArea else {
-            return nil
-        }
-        let gap = right.minX - left.maxX
-        return gap > 0 ? gap : nil
-    }
 }

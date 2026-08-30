@@ -275,6 +275,12 @@ final class MenuBarItemService {
     }
 
     private static func openApplication(bundleIdentifier: String, processIdentifier: pid_t) -> Bool {
+        if let runningApplication = NSRunningApplication(
+            processIdentifier: processIdentifier
+        ), runningApplication.activate(options: [.activateAllWindows]) {
+            return true
+        }
+
         let runningURL = NSRunningApplication(processIdentifier: processIdentifier)?.bundleURL
         let installedURL = NSWorkspace.shared.urlForApplication(
             withBundleIdentifier: bundleIdentifier

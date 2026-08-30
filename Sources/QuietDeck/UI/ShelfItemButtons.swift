@@ -3,6 +3,8 @@ import SwiftUI
 enum MenuBarItemPresentation {
     case compact
     case nativeStrip
+    case wingGrid
+    case rail
 }
 
 struct MenuBarItemButton: View {
@@ -29,27 +31,29 @@ struct MenuBarItemButton: View {
                     compactContent
                 case .nativeStrip:
                     nativeStripContent
+                case .wingGrid:
+                    wingGridContent
+                case .rail:
+                    railContent
                 }
             }
-            .frame(height: presentation == .nativeStrip ? 38 : 42)
+            .frame(width: controlWidth, height: controlHeight)
             .background(
                 RoundedRectangle(
-                    cornerRadius: presentation == .nativeStrip ? 7 : 11,
+                    cornerRadius: cornerRadius,
                     style: .continuous
                 )
                 .fill(
                     .primary.opacity(
-                        isHovering
-                            ? (presentation == .nativeStrip ? 0.11 : 0.12)
-                            : (presentation == .nativeStrip ? 0 : 0)
+                        isHovering ? hoverFillOpacity : restingFillOpacity
                     )
                 )
             )
             .overlay {
                 if presentation == .nativeStrip {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .strokeBorder(
-                            .primary.opacity(isHovering ? 0.14 : 0),
+                            .primary.opacity(isHovering ? 0.17 : 0),
                             lineWidth: 0.6
                         )
                 }
@@ -60,6 +64,58 @@ struct MenuBarItemButton: View {
         .onHover { isHovering = $0 }
         .help(item.name)
         .accessibilityLabel(item.name)
+    }
+
+    private var controlWidth: CGFloat? {
+        switch presentation {
+        case .compact, .nativeStrip:
+            return nil
+        case .wingGrid:
+            return 44
+        case .rail:
+            return 40
+        }
+    }
+
+    private var controlHeight: CGFloat {
+        switch presentation {
+        case .nativeStrip:
+            return 38
+        case .compact:
+            return 42
+        case .wingGrid:
+            return 60
+        case .rail:
+            return 40
+        }
+    }
+
+    private var cornerRadius: CGFloat {
+        switch presentation {
+        case .nativeStrip:
+            return 7
+        case .rail:
+            return 20
+        case .compact, .wingGrid:
+            return 11
+        }
+    }
+
+    private var hoverFillOpacity: Double {
+        switch presentation {
+        case .nativeStrip:
+            return 0.11
+        case .compact:
+            return 0.12
+        case .wingGrid:
+            return 0
+        case .rail:
+            return 0.12
+        }
+    }
+
+    private var restingFillOpacity: Double {
+        0
     }
 
     private var compactContent: some View {
@@ -101,6 +157,53 @@ struct MenuBarItemButton: View {
         }
     }
 
+    private var wingGridContent: some View {
+        VStack(spacing: 3) {
+            itemIcon
+                .frame(width: 24, height: 24)
+                .frame(width: 44, height: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(.primary.opacity(isHovering ? 0.11 : 0.045))
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(
+                            .primary.opacity(isHovering ? 0.17 : 0.08),
+                            lineWidth: 0.6
+                        )
+                }
+
+            if showsWingLabel {
+                Text(item.name)
+                    .font(.system(size: 7.5, weight: .medium))
+                    .foregroundStyle(.primary.opacity(0.60))
+                    .lineLimit(1)
+                    .frame(maxWidth: 52)
+            } else {
+                Color.clear
+                    .frame(height: 9)
+            }
+        }
+    }
+
+    private var railContent: some View {
+        itemIcon
+            .frame(width: 22, height: 22)
+            .frame(width: 40, height: 40)
+            .overlay {
+                Circle()
+                    .strokeBorder(
+                        .primary.opacity(isHovering ? 0.18 : 0.07),
+                        lineWidth: 0.65
+                    )
+            }
+    }
+
+    private var showsWingLabel: Bool {
+        !item.ownerBundleIdentifier.hasPrefix("com.apple.")
+    }
+
     private var metricName: String? {
         let candidate = item.name.split(separator: ":", maxSplits: 1).first.map(String.init) ?? item.name
         let recognized = ["CPU", "GPU", "RAM", "Disk", "Sensors", "Network"]
@@ -111,7 +214,12 @@ struct MenuBarItemButton: View {
     private var itemIcon: some View {
         if let symbolName = item.symbolName {
             Image(systemName: symbolName)
-                .font(.system(size: presentation == .nativeStrip ? 19 : 18, weight: .semibold))
+                .font(
+                    .system(
+                        size: symbolIconSize,
+                        weight: .semibold
+                    )
+                )
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(.primary.opacity(0.94))
         } else if let ownerIcon = item.ownerIcon {
@@ -122,6 +230,17 @@ struct MenuBarItemButton: View {
             Image(systemName: "circle.grid.2x2.fill")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.primary.opacity(0.94))
+        }
+    }
+
+    private var symbolIconSize: CGFloat {
+        switch presentation {
+        case .wingGrid, .rail:
+            return 21
+        case .nativeStrip:
+            return 19
+        case .compact:
+            return 18
         }
     }
 }

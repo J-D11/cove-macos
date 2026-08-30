@@ -103,6 +103,7 @@ final class UpdateService {
     )
     private let currentVersion: CoveVersion
     private let currentBundleURL: URL
+    private let installationTargetURL: URL
     private let session: URLSession
 
     init(
@@ -113,6 +114,14 @@ final class UpdateService {
             bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
         ) ?? CoveVersion(major: 0, minor: 0, patch: 0)
         currentBundleURL = bundle.bundleURL
+        let bundleIdentifier = bundle.bundleIdentifier ?? "com.astralworkslabs.QuietDeck"
+        installationTargetURL = CoveInstallationTarget.preferred(
+            currentBundleURL: bundle.bundleURL,
+            canonicalBundleIdentifier: Bundle(
+                url: CoveInstallationTarget.canonicalURL
+            )?.bundleIdentifier,
+            expectedBundleIdentifier: bundleIdentifier
+        )
         self.session = session
     }
 
@@ -220,7 +229,7 @@ final class UpdateService {
             try launchInstaller(
                 sourceURL: appURL,
                 stagingRoot: stagingRoot,
-                targetURL: currentBundleURL,
+                targetURL: installationTargetURL,
                 processIdentifier: ProcessInfo.processInfo.processIdentifier
             )
         } catch {
@@ -330,6 +339,7 @@ final class UpdateService {
         TARGET_PARENT=\(shellQuote(targetURL.deletingLastPathComponent().path))
         NEW_TARGET="$TARGET.cove-update-new.$$"
         BACKUP="$TARGET.cove-update-backup.$$"
+        HAD_TARGET=0
         PID=\(processIdentifier)
 
         for _ in $(/usr/bin/seq 1 200); do
@@ -358,12 +368,19 @@ final class UpdateService {
         /usr/bin/xattr -cr "$SOURCE"
         /bin/rm -rf "$NEW_TARGET" "$BACKUP"
         /usr/bin/ditto --norsrc "$SOURCE" "$NEW_TARGET"
-        /bin/mv "$TARGET" "$BACKUP"
+        if [ -e "$TARGET" ]; then
+            /bin/mv "$TARGET" "$BACKUP"
+            HAD_TARGET=1
+        fi
         if ! /bin/mv "$NEW_TARGET" "$TARGET"; then
-            /bin/mv "$BACKUP" "$TARGET"
+            if [ "$HAD_TARGET" = "1" ]; then
+                /bin/mv "$BACKUP" "$TARGET"
+            fi
             exit 1
         fi
-        /bin/rm -rf "$BACKUP"
+        if [ "$HAD_TARGET" = "1" ]; then
+            /bin/rm -rf "$BACKUP"
+        fi
         /usr/bin/open -n "$TARGET"
         /bin/rm -rf "$STAGING"
         """
