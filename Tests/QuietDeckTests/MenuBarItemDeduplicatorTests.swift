@@ -1,8 +1,24 @@
+import AppKit
 import CoreGraphics
 import XCTest
 @testable import QuietDeck
 
 final class MenuBarItemDeduplicatorTests: XCTestCase {
+    @MainActor
+    func testApplicationIndexCoalescesDuplicateProcessIdentifiers() {
+        let application = NSRunningApplication.current
+
+        let indexedApplications = MenuBarItemService.applicationsByProcessIdentifier([
+            application,
+            application,
+        ])
+
+        XCTAssertEqual(indexedApplications.count, 1)
+        XCTAssertTrue(
+            indexedApplications[application.processIdentifier] === application
+        )
+    }
+
     func testRemovesFallbackCopyAtSameOwnerNameAndPosition() {
         let direct = item(id: "direct", owner: "com.example.App", name: "Example", x: 120)
         let fallback = item(id: "fallback", owner: "com.example.App", name: "Example", x: 120)

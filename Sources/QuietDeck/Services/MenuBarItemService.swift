@@ -63,15 +63,19 @@ final class MenuBarItemService {
             return true
         }
 
-        let runningApplicationsByPID = Dictionary(
-            uniqueKeysWithValues: runningApplications.map { ($0.processIdentifier, $0) }
+        // NSWorkspace can briefly publish the same process more than once while its
+        // application list is changing. Building a dictionary with
+        // uniqueKeysWithValues traps in that case and takes Cove down during a
+        // background refresh. Coalesce those transient duplicates by PID instead.
+        let runningApplicationsByPID = Self.applicationsByProcessIdentifier(
+            runningApplications
         )
         let windowBackedItems = MenuBarWindowFallback.items(
             candidateProcessIdentifiers: Set(runningApplicationsByPID.keys)
         )
         let windowBackedPIDs = Set(windowBackedItems.map(\.processIdentifier))
 
-        let candidates = runningApplications.filter { application in
+        let candidates = Array(runningApplicationsByPID.values).filter { application in
             // Most menu-bar helpers are accessory apps. Prohibited helpers are included when
             // WindowServer confirms that they own a status-item-layer window. Known hidden-menu
             // owners are also included when macOS runs them as background-only apps.
@@ -81,9 +85,7 @@ final class MenuBarItemService {
                 || windowBackedPIDs.contains(application.processIdentifier)
         }
 
-        let applicationsByPID = Dictionary(
-            uniqueKeysWithValues: candidates.map { ($0.processIdentifier, $0) }
-        )
+        let applicationsByPID = Self.applicationsByProcessIdentifier(candidates)
 
         for application in candidates {
             guard let bundleIdentifier = resolvedBundleIdentifier(for: application) else { continue }
@@ -242,6 +244,14 @@ final class MenuBarItemService {
             windowFallbackCount: windowFallbackCount,
             visibleFallbackCount: visibleFallbackCount
         )
+    }
+
+    static func applicationsByProcessIdentifier(
+        _ applications: [NSRunningApplication]
+    ) -> [pid_t: NSRunningApplication] {
+        applications.reduce(into: [:]) { indexedApplications, application in
+            indexedApplications[application.processIdentifier] = application
+        }
     }
 
     @discardableResult
